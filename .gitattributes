@@ -1,0 +1,7 @@
+# Windows scripts keep CRLF line endings exactly as stored
+*.bat -text
+*.ps1 -text
+*.vbs -text
+
+# Screenshots are only for the GitHub page, not for the download
+docs/ export-ignore

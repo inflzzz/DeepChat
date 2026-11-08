@@ -1,0 +1,8 @@
+# Only for voice typing (faster-whisper) and stickers (rembg). The chat itself uses only the Python standard library.
+faster-whisper==1.2.1
+av==19.0.2
+numpy==2.5.4
+onnxruntime==1.31.1
+pillow==13.0.0
+rembg==2.0.87
+scipy==1.18.1

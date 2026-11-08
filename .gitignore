@@ -1,0 +1,18 @@
+# Your conversations, memory and phone code stay on your PC
+dados/
+config.json
+
+# Installed by instalar.ps1
+.venv/
+.ferramentas/
+.baixados/
+ComfyUI_windows_portable/
+modelos/
+
+# Logs and caches
+comfyui.log
+__pycache__/
+*.pyc
+*.part
+
+.atualizacao/
