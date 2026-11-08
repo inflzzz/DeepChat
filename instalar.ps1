@@ -3,6 +3,7 @@
 # Talks in Portuguese on Portuguese Windows and in English everywhere else.
 param(
     [string]$Modelos = '',    # image models to install without asking, e.g. "chroma,zimage,sd15" ("nenhum" = none)
+    [string]$Extras = '',     # extras to install without asking, e.g. "voz,microfone,figurinhas" ("nenhum" = none)
     [switch]$ComImagens,      # install every image model without asking
     [switch]$SemImagens,      # skip image creation
     [switch]$SemAtalhos,      # no desktop / Start menu shortcuts
@@ -115,16 +116,32 @@ $COMFY_URL = 'https://github.com/Comfy-Org/ComfyUI/releases/download/v0.44.0/Com
 $ESRGAN_URL = 'https://huggingface.co/Comfy-Org/Real-ESRGAN_repackaged/resolve/main/RealESRGAN_x4plus.safetensors'
 $SETEZIP_URL = 'https://www.7-zip.org/a/7zr.exe'
 $COMFY_GB = @{ 'nvidia' = 2.0; 'amd' = 1.6; 'intel' = 1.4 }
+$KOKORO_URL = 'https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/{0}'
+$KOKORO_ARQUIVOS = @('kokoro-v1.0.int8.onnx', 'voices-v1.0.bin')
+$PASTA_VOZ = Join-Path $Raiz 'modelos\voz'
+
+# The optional parts that run on the processor, so they work on any PC (no graphics card needed)
+$PACOTES_BASE = @('numpy==2.5.4', 'onnxruntime==1.31.1')
+$LISTA_EXTRAS = @(
+    @{ Chave = 'voz'; Nome = (T 'Voz do NTChat' 'NTChat voice'); Desc = (T 'lê as respostas e conversa por voz' 'reads answers aloud, voice chat')
+       GB = 0.2; Recomendado = $true; Pacotes = @('kokoro-onnx==0.6.1'); Modulos = @('kokoro_onnx') },
+    @{ Chave = 'microfone'; Nome = (T 'Microfone' 'Microphone'); Desc = (T 'fala em vez de digitar' 'talk instead of typing')
+       GB = 0.6; Recomendado = $true; Pacotes = @('faster-whisper==1.2.1', 'av==19.0.2'); Modulos = @('faster_whisper', 'av') },
+    @{ Chave = 'figurinhas'; Nome = (T 'Figurinhas' 'Stickers'); Desc = (T 'recorta o fundo das imagens' 'cuts out image backgrounds')
+       GB = 0.4; Recomendado = $false; Pacotes = @('rembg==2.0.87', 'pillow==13.0.0', 'scipy==1.18.1'); Modulos = @('rembg', 'PIL', 'scipy') }
+)
 
 # The image models. Which files they download (and from where) lives in server.py, which this installer calls to download them.
 # The sizes here are only to show in the menu: per kind of card (the RTX 50 gets the smallest files).
 $MODELOS_IMAGEM = @(
-    @{ Chave = 'chroma'; Nome = 'Chroma1-HD'; Desc = (T 'sem censura, o mais detalhado (~2 min)' 'uncensored, the most detailed (~2 min)')
+    @{ Chave = 'chroma'; Nome = 'Chroma1-HD'; Desc = (T 'sem censura, o mais detalhado (~2 min)' 'uncensored, the most detailed (~2 min)'); Recomendado = $false
        GB = @{ nvidia50 = 14.7; nvidia = 14.7; amd = 23.3; intel = 23.3 }; Pasta = 'diffusion_models'; Nomes = @('Chroma1-HD-fp8mixed.safetensors', 'Chroma1-HD.safetensors') },
-    @{ Chave = 'zimage'; Nome = 'Z-Image Turbo'; Desc = (T 'rápido (~10 s), ótimo em foto' 'fast (~10 s), great at photos')
+    @{ Chave = 'zimage'; Nome = 'Z-Image Turbo'; Desc = (T 'cria imagens rápido (~10 s)' 'creates images fast (~10 s)'); Recomendado = $true
        GB = @{ nvidia50 = 10.0; nvidia = 17.4; amd = 19.7; intel = 19.7 }; Pasta = 'diffusion_models'; Nomes = @('z_image_turbo_nvfp4.safetensors', 'z_image_turbo_bf16.safetensors') },
-    @{ Chave = 'sd15'; Nome = 'Stable Diffusion 1.5'; Desc = (T 'o de 2022: instantâneo e torto' 'the 2022 one: instant and wonky')
-       GB = @{ nvidia50 = 2.3; nvidia = 2.3; amd = 2.3; intel = 2.3 }; Pasta = 'checkpoints'; Nomes = @('v1-5-pruned-emaonly-fp16.safetensors', 'v1-5-pruned-emaonly.safetensors') }
+    @{ Chave = 'sd15'; Nome = 'Stable Diffusion 1.5'; Desc = (T 'o de 2022: instantâneo e torto' 'the 2022 one: instant and wonky'); Recomendado = $false
+       GB = @{ nvidia50 = 2.3; nvidia = 2.3; amd = 2.3; intel = 2.3 }; Pasta = 'checkpoints'; Nomes = @('v1-5-pruned-emaonly-fp16.safetensors', 'v1-5-pruned-emaonly.safetensors') },
+    @{ Chave = 'klein'; Nome = 'FLUX.2 klein'; Desc = (T 'edita suas fotos (corpo, roupa, cenário)' 'edits your photos (body, clothes, scene)'); Recomendado = $true
+       GB = @{ nvidia50 = 9.5; nvidia = 9.5; amd = 11.8; intel = 11.8 }; Pasta = 'diffusion_models'; Nomes = @('flux-2-klein-4b-fp8.safetensors') }
 )
 
 # Whatever is already in config.json wins (someone with another model or another ComfyUI just edits the file)
@@ -159,8 +176,13 @@ function Baixar([string]$url, [string]$destino) {
     Info "$(T 'Baixando' 'Downloading') $(Split-Path $destino -Leaf)..."
     $curl = Join-Path $env:SystemRoot 'System32\curl.exe'
     if (Test-Path $curl) {
-        # -C - resumes where it stopped if the internet drops
-        & $curl -L --fail --retry 5 --retry-delay 3 --progress-bar -C - -o $parte $url
+        # -C - resumes where it stopped. --speed-limit gives up on a frozen connection (under 1 KB/s for a minute),
+        # which otherwise waits forever (it happened in a clean Windows Sandbox); then it tries again from where it stopped.
+        for ($tentativa = 1; $tentativa -le 5; $tentativa++) {
+            & $curl -L --fail --retry 3 --retry-delay 3 --speed-limit 1024 --speed-time 60 --progress-bar -C - -o $parte $url
+            if ($LASTEXITCODE -eq 0) { break }
+            if ($tentativa -lt 5) { Info (T 'A conexão travou; continuando de onde parou...' 'The connection froze; resuming from where it stopped...') }
+        }
         if ($LASTEXITCODE -ne 0) { throw "$(T 'Não deu pra baixar' 'Could not download') $url (curl $LASTEXITCODE)." }
     } else {
         Invoke-WebRequest -Uri $url -OutFile $parte -UseBasicParsing
@@ -208,6 +230,14 @@ function Detectar-Placa {
 
     $todas = if ($nomes.Count) { $nomes -join ', ' } else { T 'nenhuma' 'none' }
     return @{ Nome = $todas; Imagens = $false; Tipo = 'nvidia'; Motivo = (T 'não achei uma placa NVIDIA, AMD Radeon RX ou Intel Arc' 'no NVIDIA, AMD Radeon RX or Intel Arc card found') }
+}
+
+# Unzips with .NET directly. Expand-Archive lives in a PowerShell module that fails to load on some
+# fresh Windows installs (it stopped the installer in a clean Windows Sandbox).
+function Descompactar-Zip([string]$arquivo, [string]$destino) {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    if (Test-Path -LiteralPath $destino) { Remove-Item -Recurse -Force -LiteralPath $destino }
+    [IO.Compression.ZipFile]::ExtractToDirectory($arquivo, $destino)
 }
 
 function Descompactar-7z([string]$arquivo, [string]$destino) {
@@ -272,9 +302,28 @@ function Python-Ok([string]$py) {
     return $LASTEXITCODE -eq 0
 }
 
-function Pacotes-Ok([string]$py) {
-    & $py -c "import importlib.util as u, sys; sys.exit(0 if all(u.find_spec(m) for m in ['faster_whisper', 'av', 'rembg', 'PIL', 'scipy']) else 1)" | Out-Null
+function Modulos-Ok([string]$py, [string[]]$modulos) {
+    if (-not $modulos.Count) { return $true }
+    if (-not (Test-Path $py)) { return $false }
+    $lista = ($modulos | ForEach-Object { "'$_'" }) -join ', '
+    & $py -c "import importlib.util as u, sys; sys.exit(0 if all(u.find_spec(m) for m in [$lista]) else 1)" | Out-Null
     return $LASTEXITCODE -eq 0
+}
+function Extra-Instalado($e) {
+    if (-not (Modulos-Ok (Join-Path $Venv 'Scripts\python.exe') $e.Modulos)) { return $false }
+    if ($e.Chave -eq 'voz') { foreach ($a in $KOKORO_ARQUIVOS) { if (-not (Test-Path (Join-Path $PASTA_VOZ $a))) { return $false } } }
+    return $true
+}
+function Achar-Uv {
+    $uv = (Get-Command uv -ErrorAction SilentlyContinue).Source
+    if (-not $uv) { $uv = Get-ChildItem -Path $Ferramentas -Recurse -Filter uv.exe -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName }
+    if (-not $uv) {
+        $zip = Join-Path $Baixados 'uv.zip'
+        Baixar $UV_URL $zip
+        Descompactar-Zip $zip (Join-Path $Ferramentas 'uv')
+        $uv = Get-ChildItem -Path $Ferramentas -Recurse -Filter uv.exe | Select-Object -First 1 -ExpandProperty FullName
+    }
+    return $uv
 }
 
 function Criar-Atalho([string]$caminho, [string]$argumento) {
@@ -313,13 +362,23 @@ if ($placa.Imagens) {
     Aviso (T 'O chat, a pesquisa na internet, os sites, a voz e as figurinhas funcionam normalmente.' 'Chat, web search, websites, voice and stickers work normally.')
 }
 
+# One list: the extras, then the image models (when this card can make images and they aren't managed in the app yet)
+$mostrarImagens = $placa.Imagens -and -not $imagensJaTem
+$Opcoes = @($LISTA_EXTRAS | ForEach-Object { @{ Tipo = 'extra'; Item = $_ } })
+if ($mostrarImagens) { $Opcoes += @($MODELOS_IMAGEM | ForEach-Object { @{ Tipo = 'imagem'; Item = $_ } }) }
+function Opcao-Instalada($o) { if ($o.Tipo -eq 'extra') { Extra-Instalado $o.Item } else { Modelo-Instalado $o.Item } }
+function Opcao-GB($o) { if ($o.Tipo -eq 'extra') { $o.Item.GB } else { $o.Item.GB[$placa.Tipo] } }
 function Mostrar-Menu {
     $linhas = @()
-    for ($i = 0; $i -lt $MODELOS_IMAGEM.Count; $i++) {
-        $m = $MODELOS_IMAGEM[$i]
-        $tam = if (Modelo-Instalado $m) { T 'instalado' 'installed' } else { Tamanho $m.GB[$placa.Tipo] }
-        $linhas += "$($i + 1)  $($m.Nome.PadRight(22))$($m.Desc.PadRight(40))$($tam.PadLeft(10))"
+    for ($i = 0; $i -lt $Opcoes.Count; $i++) {
+        $o = $Opcoes[$i]
+        $tam = if (Opcao-Instalada $o) { T 'instalado' 'installed' } else { Tamanho (Opcao-GB $o) }
+        $marca = if ($o.Item.Recomendado) { '✓' } else { ' ' }
+        $linhas += "$($i + 1)  $marca $($o.Item.Nome.PadRight(22))$($o.Item.Desc.PadRight(42))$($tam.PadLeft(10))"
     }
+    $linhas += ''
+    $linhas += (T '✓ = recomendado' '✓ = recommended')
+    if ($mostrarImagens) { $linhas += "$(T 'Os modelos de imagem usam o ComfyUI' 'Image models use ComfyUI') (+$(Tamanho $COMFY_GB[$placa.Build]))." }
     Caixa $linhas
 }
 
@@ -329,11 +388,9 @@ if ($SoVerificar) {
     Info "$(T 'Modelo do chat' 'Chat model'): $Modelo $estadoModelo"
     Info "Ollama: $(if (Achar-Ollama) { T 'instalado' 'installed' } else { T 'falta instalar' 'not installed yet' })"
     Info "$(T 'Python do app' 'App Python'): $(if (Python-Ok (Join-Path $Venv 'Scripts\python.exe')) { T 'pronto' 'ready' } else { T 'falta instalar' 'not installed yet' })"
-    if ($placa.Imagens) {
-        Info "ComfyUI: $(if ($imagensJaTem) { "$(T 'instalado em' 'installed in') $ComfyPasta" } else { "$(T 'baixaria' 'would download') $($COMFY_URL -f $placa.Build)" })"
-        Info (T 'Modelos de imagem:' 'Image models:')
-        Mostrar-Menu
-    }
+    if ($placa.Imagens) { Info "ComfyUI: $(if ($imagensJaTem) { "$(T 'instalado em' 'installed in') $ComfyPasta" } else { "$(T 'baixaria' 'would download') $($COMFY_URL -f $placa.Build)" })" }
+    Info (T 'Partes opcionais:' 'Optional parts:')
+    Mostrar-Menu
     exit 0
 }
 
@@ -341,28 +398,35 @@ if ($SoVerificar) {
 Get-ChildItem -LiteralPath $Raiz -File | Unblock-File -ErrorAction SilentlyContinue
 if (Test-Path (Join-Path $Raiz 'lib')) { Get-ChildItem -LiteralPath (Join-Path $Raiz 'lib') -File | Unblock-File -ErrorAction SilentlyContinue }
 
-# Which image models: from -Modelos/-ComImagens/-SemImagens, or the menu. With images already installed, they're managed in the app.
-$escolhidos = @()
-if ($placa.Imagens -and -not $Atualizando) {
-    $todas = @($MODELOS_IMAGEM | ForEach-Object { $_.Chave })
-    if ($SemImagens -or $Modelos -eq 'nenhum') { $escolhidos = @() }
-    elseif ($ComImagens) { $escolhidos = $todas }
-    elseif ($Modelos) { $escolhidos = @($Modelos.Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $todas -contains $_ }) }
-    elseif ($imagensJaTem) {
-        Info (T 'Pra instalar ou remover modelos de imagem: Configurações > Modelos de imagem, no app.' 'To install or remove image models: Settings > Image models, in the app.')
-    } else {
-        Titulo (T 'Modelos de imagem' 'Image models')
-        Info (T 'Escolha quais instalar. Dá pra instalar ou remover depois, em Configurações > Modelos de imagem.' 'Pick which ones to install. You can install or remove them later in Settings > Image models.')
+# What to install besides the chat: from -Extras / -Modelos / -ComImagens / -SemImagens, or the menu.
+# Updating keeps what is there. With images already installed, image models are managed in the app.
+$todasImagens = @($MODELOS_IMAGEM | ForEach-Object { $_.Chave })
+$todosExtras = @($LISTA_EXTRAS | ForEach-Object { $_.Chave })
+$escolhidos = @()       # image models
+$extrasEscolhidos = @()
+if ($Atualizando) {
+    $extrasEscolhidos = @($LISTA_EXTRAS | Where-Object { Modulos-Ok (Join-Path $Venv 'Scripts\python.exe') $_.Modulos } | ForEach-Object { $_.Chave })
+} else {
+    $perguntar = -not ($Extras -or $Modelos -or $ComImagens -or $SemImagens)
+    if ($Extras -and $Extras -ne 'nenhum') { $extrasEscolhidos = @($Extras.Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $todosExtras -contains $_ }) }
+    if ($placa.Imagens) {
+        if ($ComImagens) { $escolhidos = $todasImagens }
+        elseif ($Modelos -and $Modelos -ne 'nenhum') { $escolhidos = @($Modelos.Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $todasImagens -contains $_ }) }
+    }
+    if ($perguntar) {
+        Titulo (T 'O que instalar' 'What to install')
+        Info (T 'O chat vem sempre. O resto é opcional: escolha agora ou rode o instalador de novo depois.' 'The chat always comes. The rest is optional: pick now or run the installer again later.')
+        if ($imagensJaTem -and $placa.Imagens) { Info (T 'Modelos de imagem: Configurações > Modelos de imagem, no app.' 'Image models: Settings > Image models, in the app.') }
         Mostrar-Menu
         Write-Host ''
         Escrever '    ? ' 'Cyan' @(120, 180, 230)
-        $r = Read-Host (T 'Números separados por vírgula (Enter = todos, 0 = nenhum)' 'Numbers separated by commas (Enter = all, 0 = none)')
-        if ([string]::IsNullOrWhiteSpace($r)) { $escolhidos = $todas }
-        else {
-            $escolhidos = @([regex]::Matches($r, '[1-9]') | ForEach-Object { [int]$_.Value } | Where-Object { $_ -le $MODELOS_IMAGEM.Count } | Sort-Object -Unique | ForEach-Object { $MODELOS_IMAGEM[$_ - 1].Chave })
-        }
-        if ($escolhidos.Count) { Ok "$(T 'Vai instalar' 'Will install'): $(($MODELOS_IMAGEM | Where-Object { $escolhidos -contains $_.Chave } | ForEach-Object { $_.Nome }) -join ', ')" }
-        else { Aviso (T 'Sem criação de imagens por enquanto.' 'No image creation for now.') }
+        $r = Read-Host (T 'Enter = os recomendados (✓) · números separados por vírgula · 0 = só o chat' 'Enter = the recommended ones (✓) · numbers separated by commas · 0 = just the chat')
+        if ([string]::IsNullOrWhiteSpace($r)) { $marcadas = @($Opcoes | Where-Object { $_.Item.Recomendado }) }
+        else { $marcadas = @([regex]::Matches($r, '\d+') | ForEach-Object { [int]$_.Value } | Where-Object { $_ -ge 1 -and $_ -le $Opcoes.Count } | Sort-Object -Unique | ForEach-Object { $Opcoes[$_ - 1] }) }
+        $extrasEscolhidos = @($marcadas | Where-Object { $_.Tipo -eq 'extra' } | ForEach-Object { $_.Item.Chave })
+        $escolhidos = @($marcadas | Where-Object { $_.Tipo -eq 'imagem' } | ForEach-Object { $_.Item.Chave })
+        if ($marcadas.Count) { Ok "$(T 'Vai instalar' 'Will install'): $(($marcadas | ForEach-Object { $_.Item.Nome }) -join ', ')" }
+        else { Ok (T 'Só o chat por enquanto.' 'Just the chat for now.') }
     }
 }
 $querImagens = $escolhidos.Count -gt 0 -or ($imagensJaTem -and $placa.Imagens)
@@ -370,20 +434,13 @@ $querImagens = $escolhidos.Count -gt 0 -or ($imagensJaTem -and $placa.Imagens)
 $ligarComWindows = $false
 if (-not $SemAtalhos) { $ligarComWindows = Perguntar (T 'Deixar o NTChat ligado junto com o Windows (pra usar no celular sem abrir no PC)?' 'Start NTChat with Windows (so you can use it on your phone without opening it on the PC)?') $false }
 
-# 1. Python (the chat server and the voice and sticker extras)
-Passo 'Python'
+# 1. Python (the chat server) and the extras chosen (voice, microphone, stickers)
+Passo (T 'Python e extras' 'Python and extras')
 $py = Join-Path $Venv 'Scripts\python.exe'
-if (-not (Python-Ok $py) -or -not (Pacotes-Ok $py)) {
-    $uv = (Get-Command uv -ErrorAction SilentlyContinue).Source
-    if (-not $uv) {
-        $uv = Get-ChildItem -Path $Ferramentas -Recurse -Filter uv.exe -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
-    }
-    if (-not $uv) {
-        $zip = Join-Path $Baixados 'uv.zip'
-        Baixar $UV_URL $zip
-        Expand-Archive -Force -Path $zip -DestinationPath (Join-Path $Ferramentas 'uv')
-        $uv = Get-ChildItem -Path $Ferramentas -Recurse -Filter uv.exe | Select-Object -First 1 -ExpandProperty FullName
-    }
+$extrasObj = @($LISTA_EXTRAS | Where-Object { $extrasEscolhidos -contains $_.Chave })
+$modulos = @($extrasObj | ForEach-Object { $_.Modulos })
+if (-not (Python-Ok $py) -or -not (Modulos-Ok $py $modulos)) {
+    $uv = Achar-Uv
     # The app's own Python lives inside the app folder: it doesn't depend on (or touch) any other Python on the PC
     $env:UV_PYTHON_INSTALL_DIR = Join-Path $Ferramentas 'python'
     $env:UV_PYTHON_PREFERENCE = 'only-managed'
@@ -393,20 +450,38 @@ if (-not (Python-Ok $py) -or -not (Pacotes-Ok $py)) {
         & $uv venv $Venv --python 3.12
         if ($LASTEXITCODE -ne 0) { throw (T 'Não deu pra instalar o Python.' 'Could not install Python.') }
     }
-    Info (T 'Instalando os pacotes de voz e figurinhas (uns 500 MB)...' 'Installing the voice and sticker packages (about 500 MB)...')
-    & $uv pip install --python $py -r (Join-Path $Raiz 'requirements.txt')
-    if ($LASTEXITCODE -ne 0) { Aviso (T 'Os pacotes de voz e figurinhas não instalaram. O resto funciona; rode o instalador de novo depois pra tentar outra vez.' 'The voice and sticker packages did not install. Everything else works; run the installer again later to retry.') }
+    if ($extrasObj.Count) {
+        Info "$(T 'Instalando' 'Installing'): $(($extrasObj | ForEach-Object { $_.Nome }) -join ', ')..."
+        & $uv pip install --python $py ($PACOTES_BASE + @($extrasObj | ForEach-Object { $_.Pacotes }))
+        if ($LASTEXITCODE -ne 0) { Aviso (T 'Alguns extras não instalaram. O chat funciona; rode o instalador de novo depois pra tentar outra vez.' 'Some extras did not install. The chat works; run the installer again later to retry.') }
+    }
+}
+if ($extrasEscolhidos -contains 'voz') {
+    foreach ($a in $KOKORO_ARQUIVOS) { Baixar ($KOKORO_URL -f $a) (Join-Path $PASTA_VOZ $a) }
 }
 Ok (T 'Python pronto.' 'Python ready.')
 
-# 2. Ollama (runs the chat model)
+# 2. Ollama (runs the chat model). Ollama and its models go to the Windows drive, wherever the app folder is.
 Passo 'Ollama'
 $ollama = Achar-Ollama
+$precisa = 0
+if (-not $ollama) { $precisa += 3 }
+if (-not ($ollama -and (Ollama-Ligado) -and (Tem-Modelo $Modelo))) { $precisa += 7 }
+if ($precisa) {
+    $disco = $env:SystemDrive.TrimEnd(':')
+    $livreSistema = [math]::Floor((Get-PSDrive -Name $disco).Free / 1GB)
+    if ($livreSistema -lt $precisa) {
+        throw (T "Falta espaço no disco $($disco): o Ollama e o modelo do chat precisam de uns $precisa GB livres nele e só tem $livreSistema GB. Libere espaço e rode o instalador de novo." "Not enough space on drive $($disco): Ollama and the chat model need about $precisa GB free there and it only has $livreSistema GB. Free some space and run the installer again.")
+    }
+}
 if (-not $ollama) {
     $setup = Join-Path $Baixados 'OllamaSetup.exe'
     Baixar $OLLAMA_URL $setup
     Info (T 'Instalando o Ollama...' 'Installing Ollama...')
-    Start-Process -FilePath $setup -ArgumentList '/VERYSILENT', '/NORESTART', '/SUPPRESSMSGBOXES' -Wait
+    # Wait for the setup program only: "-Wait" also waits for everything it opens, and Ollama's setup leaves
+    # Ollama running at the end, so on a PC without Ollama the installer used to hang here forever.
+    $proc = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT', '/NORESTART', '/SUPPRESSMSGBOXES' -PassThru
+    [void]$proc.WaitForExit(600000)
     $env:Path = [Environment]::GetEnvironmentVariable('Path', 'User') + ';' + [Environment]::GetEnvironmentVariable('Path', 'Machine')
     $ollama = Achar-Ollama
     if (-not $ollama) { throw (T 'O Ollama não foi instalado. Instale pelo site ollama.com e rode este instalador de novo.' 'Ollama was not installed. Install it from ollama.com and run this installer again.') }
@@ -490,6 +565,7 @@ $fim = @((T 'Tudo pronto!' 'All set!'))
 if (-not $Atualizando) {
     $fim += ''
     $fim += (T 'Abra pelo atalho "NTChat" na área de trabalho.' 'Open it from the "NTChat" shortcut on the desktop.')
+    $fim += (T 'Na primeira vez, ele mostra um tour rápido das funções.' 'The first time, it shows a quick tour of what it can do.')
     $fim += (T 'No celular: Configurações > Usar no celular (mesmo Wi-Fi).' 'On your phone: Settings > Use on your phone (same Wi-Fi).')
 }
 Caixa $fim 'Green' @(110, 200, 120)

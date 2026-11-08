@@ -80,6 +80,8 @@ CHROMA_FILES = ["Chroma1-HD-fp8mixed.safetensors", "Chroma1-HD.safetensors"]
 T5_FILES = ["t5xxl_fp8_e4m3fn_scaled.safetensors", "t5xxl_fp16.safetensors"]
 SD15_FILES = ["v1-5-pruned-emaonly-fp16.safetensors", "v1-5-pruned-emaonly.safetensors"]
 LCM_FILES = ["lcm-lora-sdv1-5.safetensors"]
+KLEIN_FILES = ["flux-2-klein-4b-fp8.safetensors"]
+GENERATORS = ("chroma", "zimage", "sd15")  # models that create images from a description; klein edits photos
 SD15_SIZES = {"quadrado": (512, 512), "retrato": (512, 768), "paisagem": (768, 512)}
 HF_ZIMAGE = "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files"
 HF_CHROMA = "https://huggingface.co/Comfy-Org/Chroma1-HD/resolve/main/split_files/diffusion_models"
@@ -94,6 +96,8 @@ MODEL_FILES = {
     "Chroma1-HD.safetensors": (f"{HF_CHROMA}/Chroma1-HD.safetensors", 17.8),
     "t5xxl_fp8_e4m3fn_scaled.safetensors": ("https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp8_e4m3fn_scaled.safetensors", 5.2),
     "v1-5-pruned-emaonly-fp16.safetensors": ("https://huggingface.co/Comfy-Org/stable-diffusion-v1-5-archive/resolve/main/v1-5-pruned-emaonly-fp16.safetensors", 2.13),
+    "flux-2-klein-4b-fp8.safetensors": ("https://huggingface.co/black-forest-labs/FLUX.2-klein-4b-fp8/resolve/main/flux-2-klein-4b-fp8.safetensors", 3.8),
+    "flux2-vae.safetensors": ("https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/vae/flux2-vae.safetensors", 0.32),
     "lcm-lora-sdv1-5.safetensors": ("https://huggingface.co/latent-consistency/lcm-lora-sdv1-5/resolve/main/pytorch_lora_weights.safetensors", 0.13),
 }
 # The image models the app knows, best first (the first one installed is the default).
@@ -111,6 +115,11 @@ IMAGE_MODELS = {
     "sd15": {"name": "Stable Diffusion 1.5", "files": [
         ("checkpoints", SD15_FILES, "v1-5-pruned-emaonly-fp16.safetensors"),
         ("loras", LCM_FILES, "lcm-lora-sdv1-5.safetensors")]},
+    # edits photos by instruction; shares the Qwen 3 4B text encoder with Z-Image
+    "klein": {"name": "FLUX.2 klein", "files": [
+        ("diffusion_models", KLEIN_FILES, "flux-2-klein-4b-fp8.safetensors"),
+        ("text_encoders", TEXT_ENCODER_FILES, {"nvidia50": "qwen_3_4b_fp8_mixed.safetensors", "nvidia": "qwen_3_4b_fp8_mixed.safetensors", "other": "qwen_3_4b.safetensors"}),
+        ("vae", ["flux2-vae.safetensors"], "flux2-vae.safetensors")]},
 }
 IMAGE_SIZES = {"quadrado": (1024, 1024), "retrato": (832, 1216), "paisagem": (1216, 832)}
 image_lock = threading.Lock()
@@ -131,6 +140,10 @@ class UserError(Exception):
 
 
 EN_ERRORS = {
+    "diga o que mudar na foto": "say what to change in the photo",
+    "pra editar fotos, instale o FLUX.2 klein em Configurações > Modelos de imagem": "to edit photos, install FLUX.2 klein in Settings > Image models",
+    "não achei a foto original pra editar de novo": "couldn't find the original photo to edit again",
+    "foto inválida": "invalid photo",
     "acesso negado": "access denied",
     "arquivo grande demais": "file too big",
     "entre com o código do PC": "sign in with the code shown on the PC",
@@ -454,7 +467,21 @@ model_job = {"key": None, "action": None, "done": 0, "total": 0, "error": None, 
 model_job_lock = threading.Lock()
 
 
-def download_file(url, dest, on_bytes, should_stop):
+DOWNLOAD_HICCUPS = ("o site não respondeu", "a conexão caiu; tente de novo que ele continua de onde parou")
+
+
+def download_file(url, dest, on_bytes, should_stop, tries=5):
+    """Downloads into dest.part, resuming by itself (up to `tries` times) when the connection drops or freezes."""
+    for attempt in range(tries):
+        try:
+            return download_once(url, dest, on_bytes, should_stop)
+        except UserError as e:
+            if str(e) not in DOWNLOAD_HICCUPS or attempt == tries - 1 or should_stop():
+                raise
+            time.sleep(3)
+
+
+def download_once(url, dest, on_bytes, should_stop):
     """Downloads into dest.part (resuming if it is there) and renames it at the end."""
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     part = dest + ".part"
@@ -474,6 +501,8 @@ def download_file(url, dest, on_bytes, should_stop):
     with resp:
         if have and resp.status != 206:
             have = 0  # the server ignored the resume: start over
+        length = resp.headers.get("Content-Length") or ""
+        expected = have + int(length) if length.isdigit() else None
         on_bytes(have)
         with open(part, "ab" if have else "wb") as f:
             while True:
@@ -488,6 +517,9 @@ def download_file(url, dest, on_bytes, should_stop):
                 f.write(chunk)
                 have += len(chunk)
                 on_bytes(have)
+    # a connection that closes early just looks like the end of the file: check the size the site promised
+    if expected is not None and have < expected:
+        raise UserError("a conexão caiu; tente de novo que ele continua de onde parou")
     os.replace(part, dest)
 
 
@@ -634,8 +666,12 @@ def cli_install(args):
             sys.exit(1)
 
 
+def generator_models():
+    return [k for k in image_models() if k in GENERATORS]
+
+
 def pick_image_model(key):
-    installed = image_models()
+    installed = generator_models()
     if key in installed:
         return key
     return installed[0] if installed else "zimage"
@@ -659,6 +695,7 @@ def features():
         FEATURES = {
             "voice": has_module("faster_whisper") and has_module("av"),
             "stickers": has_module("rembg") and has_module("PIL") and has_module("scipy"),
+            "tts": voice_ready(),
         }
     return FEATURES
 
@@ -897,43 +934,73 @@ def upscale_workflow(input_name, seed):
     }
 
 
+class ComfyFailed(Exception):
+    pass
+
+
+OUT_OF_MEMORY = ("out of memory", "outofmemory", "allocation on device", "not enough memory")
+
+
+def comfy_once(workflow, output_node, timeout):
+    start = time.time()
+    prompt_id = local_json(COMFY + "/prompt", {"prompt": workflow})["prompt_id"]
+    while True:
+        if time.time() - start > timeout:
+            raise UserError("o gerador demorou demais")
+        time.sleep(1)
+        history = local_json(f"{COMFY}/history/{prompt_id}") or {}
+        if prompt_id in history:
+            entry = history[prompt_id]
+            break
+    status = entry.get("status", {})
+    if status.get("status_str") != "success":
+        errors = [m[1].get("exception_message", "") for m in status.get("messages", [])
+                  if isinstance(m, list) and len(m) > 1 and m[0] == "execution_error" and isinstance(m[1], dict)]
+        raise ComfyFailed(" ".join(errors))
+    info = entry["outputs"][output_node]["images"][0]
+    query = urllib.parse.urlencode({"filename": info["filename"], "subfolder": info.get("subfolder", ""), "type": "output"})
+    with urllib.request.urlopen(f"{COMFY}/view?{query}", timeout=60) as resp:
+        return resp.read()
+
+
 def run_comfy(workflow, output_node, timeout=420):
-    """Roda um workflow no ComfyUI e devolve (png, segundos). Deixa os modelos de imagem na placa."""
-    global last_image_at, comfy_loaded
-    global chat_warm
+    """Runs a ComfyUI workflow and returns (png, seconds).
+    The chat model stays on the video card: ComfyUI fits the image model in what is left and keeps the rest in RAM
+    (on an RTX 5060 8 GB: ~7 s per image after the first, and the chat never reloads). If a smaller card runs out of
+    memory anyway, the chat model leaves the card and it tries once more."""
+    global last_image_at, comfy_loaded, chat_warm
     with image_lock:
-        chat_warm = False
-        unload_chat()
         ensure_comfy()
-        start = time.time()
         comfy_loaded = True
-        prompt_id = local_json(COMFY + "/prompt", {"prompt": workflow})["prompt_id"]
-        while True:
-            if time.time() - start > timeout:
-                raise UserError("o gerador demorou demais")
-            time.sleep(1)
-            history = local_json(f"{COMFY}/history/{prompt_id}") or {}
-            if prompt_id in history:
-                entry = history[prompt_id]
-                break
-        if entry.get("status", {}).get("status_str") != "success":
-            raise UserError("o gerador falhou ao criar a imagem")
-        info = entry["outputs"][output_node]["images"][0]
-        query = urllib.parse.urlencode({"filename": info["filename"], "subfolder": info.get("subfolder", ""), "type": "output"})
-        with urllib.request.urlopen(f"{COMFY}/view?{query}", timeout=60) as resp:
-            png = resp.read()
+        start = time.time()
+        try:
+            png = comfy_once(workflow, output_node, timeout)
+        except ComfyFailed as e:
+            if not any(w in str(e).lower() for w in OUT_OF_MEMORY):
+                raise UserError("o gerador falhou ao criar a imagem")
+            chat_warm = False
+            unload_chat()
+            try:
+                local_json(COMFY + "/free", {"unload_models": True, "free_memory": False})
+            except (urllib.error.URLError, OSError):
+                pass
+            try:
+                png = comfy_once(workflow, output_node, timeout)
+            except ComfyFailed:
+                raise UserError("o gerador falhou ao criar a imagem")
         last_image_at = time.time()
         return png, round(time.time() - start, 1)
 
 
 def release_gpu():
-    """Tira os modelos de imagem da placa pra o chat (9B) voltar a caber."""
+    """Right before the chat model loads: takes the image models off the video card. They stay in RAM, so the next
+    image doesn't read them from disk again. While the chat model is already on the card nothing moves (they share it)."""
     global comfy_loaded
     with image_lock:
-        if not comfy_loaded:
+        if not comfy_loaded or chat_model_loaded():
             return {"freed": False}
         try:
-            local_json(COMFY + "/free", {"unload_models": True, "free_memory": True})
+            local_json(COMFY + "/free", {"unload_models": True, "free_memory": False})
         except (urllib.error.URLError, OSError):
             pass
         comfy_loaded = False
@@ -1033,6 +1100,138 @@ def edit_image(file, prompt, strength, model=None):
     return {"image": data_url(png, "image/png"), "file": name, "seconds": seconds, "model": model}
 
 
+def klein_edit_workflow(input_name, prompt, seed, ref_name=None):
+    """Edits a photo by instruction with FLUX.2 klein 4B (ComfyUI's official 4B distilled edit templates).
+    With ref_name, a second photo joins as another reference ("image 2"), chained like the official two-image template."""
+    w = {
+        "1": {"class_type": "UNETLoader", "inputs": {"unet_name": comfy_model("diffusion_models", KLEIN_FILES), "weight_dtype": "default"}},
+        "2": {"class_type": "CLIPLoader", "inputs": {"clip_name": comfy_model("text_encoders", TEXT_ENCODER_FILES), "type": "flux2", "device": "default"}},
+        "3": {"class_type": "VAELoader", "inputs": {"vae_name": "flux2-vae.safetensors"}},
+        "4": {"class_type": "LoadImage", "inputs": {"image": input_name}},
+        "5": {"class_type": "ImageScaleToTotalPixels", "inputs": {"image": ["4", 0], "upscale_method": "lanczos", "megapixels": 1.0, "resolution_steps": 16}},
+        "6": {"class_type": "GetImageSize", "inputs": {"image": ["5", 0]}},
+        "7": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["2", 0], "text": prompt}},
+        "8": {"class_type": "ConditioningZeroOut", "inputs": {"conditioning": ["7", 0]}},
+        "9": {"class_type": "VAEEncode", "inputs": {"pixels": ["5", 0], "vae": ["3", 0]}},
+        "10": {"class_type": "ReferenceLatent", "inputs": {"conditioning": ["7", 0], "latent": ["9", 0]}},
+        "11": {"class_type": "ReferenceLatent", "inputs": {"conditioning": ["8", 0], "latent": ["9", 0]}},
+        "12": {"class_type": "CFGGuider", "inputs": {"model": ["1", 0], "positive": ["10", 0], "negative": ["11", 0], "cfg": 1.0}},
+        "13": {"class_type": "KSamplerSelect", "inputs": {"sampler_name": "euler"}},
+        "14": {"class_type": "Flux2Scheduler", "inputs": {"steps": 4, "width": ["6", 0], "height": ["6", 1]}},
+        "15": {"class_type": "EmptyFlux2LatentImage", "inputs": {"width": ["6", 0], "height": ["6", 1], "batch_size": 1}},
+        "16": {"class_type": "RandomNoise", "inputs": {"noise_seed": seed}},
+        "17": {"class_type": "SamplerCustomAdvanced", "inputs": {"noise": ["16", 0], "guider": ["12", 0], "sampler": ["13", 0], "sigmas": ["14", 0], "latent_image": ["15", 0]}},
+        "18": {"class_type": "VAEDecode", "inputs": {"samples": ["17", 0], "vae": ["3", 0]}},
+        "19": {"class_type": "SaveImage", "inputs": {"images": ["18", 0], "filename_prefix": "chatfoto"}},
+    }
+    if ref_name:
+        w["20"] = {"class_type": "LoadImage", "inputs": {"image": ref_name}}
+        w["21"] = {"class_type": "ImageScaleToTotalPixels", "inputs": {"image": ["20", 0], "upscale_method": "lanczos", "megapixels": 1.0, "resolution_steps": 16}}
+        w["22"] = {"class_type": "VAEEncode", "inputs": {"pixels": ["21", 0], "vae": ["3", 0]}}
+        w["23"] = {"class_type": "ReferenceLatent", "inputs": {"conditioning": ["10", 0], "latent": ["22", 0]}}
+        w["24"] = {"class_type": "ReferenceLatent", "inputs": {"conditioning": ["11", 0], "latent": ["22", 0]}}
+        w["12"]["inputs"]["positive"] = ["23", 0]
+        w["12"]["inputs"]["negative"] = ["24", 0]
+    return w
+
+
+PHOTO_TYPES = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
+MAX_PHOTO_BYTES = 25 * 1024 * 1024
+
+
+def new_photo_name(input_dir, ext):
+    name = f"chat_foto_{int(time.time() * 1000)}.{ext}"
+    return name.replace(".", "_2.", 1) if os.path.exists(os.path.join(input_dir, name)) else name
+
+
+def photo_input(image=None, source=None, file=None):
+    """A photo for ComfyUI: a new one sent as a data URL, one sent before (by name), or an edited result saved in
+    Imagens do Chat (so a new edit continues from the last version)."""
+    input_dir = os.path.join(COMFY_DIR, "ComfyUI", "input")
+    os.makedirs(input_dir, exist_ok=True)
+    if file:
+        path = saved_image(file)
+        ext = os.path.splitext(path)[1].lower().lstrip(".")
+        name = new_photo_name(input_dir, ext if ext in ("jpg", "png", "webp") else "png")
+        shutil.copyfile(path, os.path.join(input_dir, name))
+        return name
+    if source:
+        name = os.path.basename(str(source))
+        if not re.fullmatch(r"chat_foto_\d+(_2)?\.(jpg|png|webp)", name) or not os.path.isfile(os.path.join(input_dir, name)):
+            raise UserError("não achei a foto original pra editar de novo")
+        return name
+    m = re.match(r"data:(image/(?:jpeg|png|webp));base64,", str(image or ""))
+    if not m:
+        raise UserError("foto inválida")
+    try:
+        raw = base64.b64decode(str(image)[m.end():], validate=False)
+    except ValueError:
+        raise UserError("foto inválida")
+    if not raw or len(raw) > MAX_PHOTO_BYTES:
+        raise UserError("foto inválida")
+    name = new_photo_name(input_dir, PHOTO_TYPES[m.group(1)])
+    with open(os.path.join(input_dir, name), "wb") as f:
+        f.write(raw)
+    return name
+
+
+RAISED_HAND = re.compile(r"^\s*change (?:the person's |their |the )?raised hand into\b", re.I)
+L_SIGN = re.compile(r"\bL[ -]?(?:hand )?(?:sign|shape|gesture)\b")
+LOWER_HAND = ("If the person has a hand raised, lower it completely out of the photo so no raised hand or fingers are visible. "
+              "Hands resting low or holding something stay as they are.")
+ONE_HAND = "Only this one hand is raised; the other hand stays down where it is."
+
+
+RAISE_HAND = re.compile(r"^\s*make the person raise (?:their|his|her) (?:right |left )?hand\b", re.I)
+
+
+def one_hand(prompt):
+    """A new raised hand often comes with a second one: say there is only one (before the "Keep", if there is one)."""
+    if ONE_HAND in prompt:
+        return prompt
+    cut = prompt.find("Keep ")
+    return f"{prompt[:cut].rstrip()} {ONE_HAND} {prompt[cut:]}" if cut > 0 else f"{prompt.rstrip()} {ONE_HAND}"
+
+
+def edit_passes(prompt):
+    """The editor can't turn a raised hand into a very different gesture (index finger up -> peace sign comes out the
+    same), but draws the gesture well on a new hand: so it lowers the hand first, then raises it making the gesture.
+    The L only adds the thumb to a raised index finger, so it stays one pass."""
+    if RAISE_HAND.match(prompt):
+        return [one_hand(prompt)]
+    m = RAISED_HAND.match(prompt)
+    if not m or L_SIGN.search(prompt):
+        return [prompt]
+    rest = prompt[m.end():]
+    cut = rest.find("Keep ")
+    gesture, keep = (rest[:cut].rstrip(), rest[cut:]) if cut >= 0 else (rest.rstrip(), "Keep everything else exactly the same.")
+    return [f"{LOWER_HAND} {keep}", f"Make the person raise their right hand next to their face, making{gesture} {ONE_HAND} {keep}"]
+
+
+def edit_photo(image=None, prompt=None, source=None, image2=None, source2=None, file=None):
+    """Edits a photo the person sent (or the same one again, for "another version") with FLUX.2 klein.
+    An optional second photo is a reference: "put the logo from image 2 on the shirt in image 1"."""
+    prompt = (prompt or "").strip()[:2000]
+    if not prompt:
+        raise UserError("diga o que mudar na foto")
+    if "klein" not in image_models():
+        raise UserError("pra editar fotos, instale o FLUX.2 klein em Configurações > Modelos de imagem")
+    name = photo_input(image, source, file)
+    ref = photo_input(image2, source2) if (image2 or source2) else None
+    current, seconds = name, 0
+    passes = edit_passes(prompt)
+    for i, step in enumerate(passes):
+        png, took = run_comfy(klein_edit_workflow(current, step, random.randint(1, 2**31 - 1), ref), "19", timeout=900)
+        seconds += took
+        if i < len(passes) - 1:  # the in-between photo only feeds the next pass
+            input_dir = os.path.join(COMFY_DIR, "ComfyUI", "input")
+            current = new_photo_name(input_dir, "png")
+            with open(os.path.join(input_dir, current), "wb") as f:
+                f.write(png)
+    saved = save_png(png, "_foto_editada")
+    return {"image": data_url(png, "image/png"), "file": saved, "seconds": round(seconds, 1), "model": "klein", "source": name, "source2": ref}
+
+
 def upscale_plain_workflow(input_name):
     """2K with Real-ESRGAN only, for when Z-Image (which adds detail) isn't installed."""
     return {
@@ -1044,9 +1243,11 @@ def upscale_plain_workflow(input_name):
     }
 
 
-def upscale_image(file):
+def upscale_image(file, model=None):
+    """2K with Real-ESRGAN. A Z-Image picture also gets a light Z-Image pass for detail: that model is on the card
+    already. Any other picture skips it, so the 2K never loads a second big model."""
     input_name = to_comfy_input(file)
-    if "zimage" in image_models():
+    if model == "zimage" and "zimage" in image_models():
         png, seconds = run_comfy(upscale_workflow(input_name, random.randint(1, 2**31 - 1)), "15", timeout=900)
     else:
         png, seconds = run_comfy(upscale_plain_workflow(input_name), "5", timeout=600)
@@ -1054,8 +1255,76 @@ def upscale_image(file):
     return {"image": data_url(png, "image/png"), "file": name, "seconds": seconds}
 
 
+# ---------- voice (Kokoro, on the CPU: the graphics card stays with the chat and the images) ----------
+VOICE_DIR = os.path.join(ROOT, "modelos", "voz")
+VOICE_FILES = ("kokoro-v1.0.int8.onnx", "voices-v1.0.bin")
+VOICES = {"pt": ("pm_santa", "pf_dora", "pm_alex"), "en": ("af_heart", "af_bella", "am_michael", "am_fenrir")}
+MAX_TTS_CHARS = 800
+kokoro_model = None
+kokoro_lock = threading.Lock()
+
+
+def voice_ready():
+    return has_module("kokoro_onnx") and all(os.path.isfile(os.path.join(VOICE_DIR, f)) for f in VOICE_FILES)
+
+
+def speak_text(text, voice=None, lang="pt", speed=None):
+    """One piece of an answer (a sentence or two) as a WAV data URL. The page asks for the next piece while this one plays."""
+    global kokoro_model
+    text = re.sub(r"\s+", " ", str(text or "")).strip()[:MAX_TTS_CHARS]
+    if not text:
+        raise UserError("nada pra falar")
+    if not voice_ready():
+        raise UserError("a voz não está instalada")
+    lang = "en" if lang == "en" else "pt"
+    if voice not in VOICES[lang]:
+        voice = VOICES[lang][0]
+    try:
+        speed = min(1.5, max(0.7, float(speed or 1.0)))
+    except (TypeError, ValueError):
+        speed = 1.0
+    import io
+    import wave
+    import numpy
+    with kokoro_lock:
+        if kokoro_model is None:
+            from kokoro_onnx import Kokoro
+            kokoro_model = Kokoro(*(os.path.join(VOICE_DIR, f) for f in VOICE_FILES))
+        audio, rate = kokoro_model.create(text, voice=voice, speed=speed, lang="en-us" if lang == "en" else "pt-br")
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:  # 16-bit mono WAV
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes((numpy.clip(audio, -1, 1) * 32767).astype("<i2").tobytes())
+    return {"audio": data_url(buf.getvalue(), "audio/wav"), "seconds": round(len(audio) / rate, 2)}
+
+
 whisper_model = None
 whisper_lock = threading.Lock()
+
+
+def load_whisper():
+    global whisper_model
+    with whisper_lock:
+        if whisper_model is None:
+            from faster_whisper import WhisperModel
+            whisper_model = WhisperModel("small", device="cpu", compute_type="int8", cpu_threads=max(4, (os.cpu_count() or 8) // 2))
+    return whisper_model
+
+
+def voice_ready_now():
+    """The voice conversation is starting: load the transcription and the voice in the background (both on the CPU)."""
+    def load():
+        try:
+            if features()["voice"]:
+                load_whisper()
+            if voice_ready():
+                speak_text(".")
+        except Exception:
+            pass
+    threading.Thread(target=load, daemon=True).start()
+    return {"ok": True}
 MAX_AUDIO_BYTES = 30 * 1024 * 1024
 
 
@@ -1084,10 +1353,8 @@ def transcribe(audio, lang="pt"):
         raise UserError("o ditado por voz não foi instalado. Rode o instalar.bat de novo")
     import tempfile
     start = time.time()
+    load_whisper()
     with whisper_lock:
-        if whisper_model is None:
-            from faster_whisper import WhisperModel
-            whisper_model = WhisperModel("small", device="cpu", compute_type="int8", cpu_threads=max(4, (os.cpu_count() or 8) // 2))
         with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp:
             tmp.write(audio)
             path = tmp.name
@@ -1749,8 +2016,8 @@ class ChatHandler(QuietHandler):
         query = urllib.parse.parse_qs(parts.query)
         arg = lambda k: (query.get(k) or [""])[0].strip()
         if path == "/api/health":
-            self.send_json({"ok": True, "sites": SITES, "device": who, "model": CHAT_MODEL, "model_name": MODEL_NAME, "features": {**features(), "images": bool(image_models())}, "version": APP_VERSION,
-                            "image_models": [{"key": k, "name": IMAGE_MODELS[k]["name"]} for k in image_models()]})
+            self.send_json({"ok": True, "sites": SITES, "device": who, "model": CHAT_MODEL, "model_name": MODEL_NAME, "features": {**features(), "images": bool(image_models()), "photo_edit": "klein" in image_models()}, "version": APP_VERSION,
+                            "image_models": [{"key": k, "name": IMAGE_MODELS[k]["name"]} for k in generator_models()]})
         elif path == "/api/search":
             q = arg("q")
 
@@ -1801,7 +2068,7 @@ class ChatHandler(QuietHandler):
             return self.send_json({"ok": True}, headers={"Set-Cookie": cookie})
         if who == "guest":
             return self.send_json({"error": "entre com o código do PC"}, 401)
-        big = path.startswith("/ollama/") or path == "/api/chat-save"
+        big = path.startswith("/ollama/") or path in ("/api/chat-save", "/api/edit-photo")
         if path == "/api/transcribe":
             if length > MAX_AUDIO_BYTES:
                 return self.send_json({"error": "áudio longo demais"}, 413)
@@ -1838,8 +2105,14 @@ class ChatHandler(QuietHandler):
             self.run_api(lambda: generate_image(data.get("prompt"), data.get("formato"), data.get("quantidade", 1), data.get("modelo")))
         elif path == "/api/edit-image":
             self.run_api(lambda: edit_image(data.get("file"), data.get("prompt"), data.get("forca"), data.get("modelo")))
+        elif path == "/api/edit-photo":
+            self.run_api(lambda: edit_photo(data.get("imagem"), data.get("pedido"), data.get("fonte"), data.get("imagem2"), data.get("fonte2"), data.get("arquivo")))
+        elif path == "/api/voice-ready":
+            self.run_api(voice_ready_now)
+        elif path == "/api/tts":
+            self.run_api(lambda: speak_text(data.get("texto"), data.get("voz"), self.lang(), data.get("velocidade")))
         elif path == "/api/upscale":
-            self.run_api(lambda: upscale_image(data.get("file")))
+            self.run_api(lambda: upscale_image(data.get("file"), data.get("modelo")))
         elif path == "/api/sticker":
             self.run_api(lambda: make_sticker(data.get("file")))
         elif path == "/api/gpu-for-chat":

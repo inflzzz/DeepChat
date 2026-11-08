@@ -2,7 +2,7 @@
 
 [Português](README.pt-BR.md) · **English**
 
-A ChatGPT-style AI assistant that runs **entirely on your PC**: uncensored, no subscription, and your chats never go to any company. It chats, thinks before answering, searches the web, builds websites and images, reads photos and PDFs, and also works on your phone over your home Wi-Fi.
+A ChatGPT-style AI assistant that runs **entirely on your PC**: uncensored, no subscription, and your chats never go to any company. It chats, thinks before answering, searches the web, builds websites and images, **edits your photos**, **talks with you by voice**, reads photos and PDFs, and also works on your phone over your home Wi-Fi.
 
 ### [⬇ Download NTChat for Windows](https://github.com/inflzzz/NTChat/releases/latest/download/NTChat.zip)
 
@@ -14,21 +14,27 @@ Then just extract it and double-click `instalar.bat`. Every version is in [Relea
 
 1. [Download NTChat.zip](https://github.com/inflzzz/NTChat/releases/latest/download/NTChat.zip) and extract it to a folder (ideally on an SSD, e.g. `C:\NTChat`).
 2. Open the **NTChat** folder and double-click **`instalar.bat`**.
-3. Pick which image models you want (or none), say whether it should start with Windows, and wait. At the end it creates a **NTChat** shortcut on your desktop and opens the app.
+3. Pick what to install besides the chat (Enter installs the recommended ones, marked with ✓), say whether it should start with Windows, and wait. At the end it creates a **NTChat** shortcut on your desktop and opens the app, with a quick tour of what it does.
+
+![First-run tour](docs/prints/en/tour.png)
 
 The installer downloads and sets up everything by itself, no administrator needed:
 
 | What | For | Disk space |
 |---|---|---|
-| Its own Python (lives inside the app folder) | chat server, voice and stickers | ~0.6 GB |
+| Its own Python (lives inside the app folder) | chat server | ~0.1 GB |
 | [Ollama](https://ollama.com) | runs the AI model | ~3 GB |
 | **NTChat** model (uncensored, understands images) | the brain of the chat | ~6 GB |
+| NTChat voice ✓ (optional) | reads answers aloud and talks with you | 0.2 GB |
+| Microphone ✓ (optional) | talk instead of typing | 0.6 GB |
+| Stickers (optional) | cuts out image backgrounds | 0.4 GB |
 | [ComfyUI](https://github.com/Comfy-Org/ComfyUI) (if you pick any image model) | runs the image models | ~6 GB |
 | Chroma1-HD (optional) | uncensored, the most detailed images | 15 to 23 GB |
-| Z-Image Turbo (optional) | fast images, great at photos | 10 to 20 GB |
+| Z-Image Turbo ✓ (optional) | fast images, great at photos | 10 to 20 GB |
 | Stable Diffusion 1.5 (optional) | instant images, with a wonky old-AI look | 2.3 GB |
+| FLUX.2 klein ✓ (optional) | edits the photos you send | 4.4 to 12 GB |
 
-About 10 GB without images. You pick the image models from a menu during installation, and later you can install or remove each one in **Settings → Image models**, without running the installer again.
+✓ = recommended. Just the chat is about 10 GB. Everything optional is in one menu during installation; the voice parts run on the processor, so they work on any PC. Later you can install or remove each image model in **Settings → Image models**, without running the installer again; for voice, microphone or stickers, just run the installer again.
 
 You can run `instalar.bat` again any time: it skips what is already installed and resumes interrupted downloads. If you open the shortcut before installing, the installer opens by itself. The installer and the app speak English or Portuguese, following your Windows and browser language.
 
@@ -78,7 +84,7 @@ Ask for a website and it shows up ready next to the chat. You can see how it loo
 
 Turn on **Image** and ask for anything: a photo, a meme, a drawing. Pick the model next to the style:
 
-- **Chroma** (default): uncensored and the most detailed; takes about 2 minutes per image.
+- **Chroma**: uncensored and the most detailed; takes about 2 minutes per image.
 - **Z-Image Turbo**: fast (about 10 seconds) and great at realistic photos.
 - **Stable Diffusion 1.5**: the 2022 model. Comes out in seconds, with that wonky, funny look of the old AIs.
 
@@ -96,6 +102,32 @@ Every image goes to the gallery and to a folder in your Documents.
 
 ![Image gallery](docs/prints/en/galeria.jpg)
 
+### Edits your photos
+
+Send a photo with **Image** on and ask for the change in your own words. The rest of the photo stays the same. FLUX.2 klein does the editing, about 10 seconds per edit.
+
+![Photo editing examples](docs/prints/en/edicao-fotos.jpg)
+
+- **Gestures, clothes and accessories**: "make a peace sign", "make the jacket red", "put sunglasses on him".
+- **Body**: "make him very fat", "even fatter", "make him thin".
+- **Montages**: send your photo and one of a place and ask "put me in this scene", or a logo and "put this on the shirt".
+- **Improve**: "improve this photo" sharpens a small, blurry or old photo.
+- Each request continues from the last version, so you can adjust step by step.
+
+<sub>The example photos were made in NTChat itself (Z-Image) and edited with short requests like the ones above. Nobody in them is real.</sub>
+
+### Voice conversation
+
+Click the waves button next to the microphone and talk: it listens, answers briefly, speaks the answer and listens again. The voice is **Kokoro** (pick one in Settings) and runs on the processor, without using the graphics card. The **Listen** button on answers uses the same voice.
+
+![Voice conversation](docs/prints/en/voz.png)
+
+### Prompts
+
+In **Prompts**, in the sidebar, describe a scene in your own words and it writes an English prompt for any image generator, without making up things you didn't say.
+
+![Prompt generator](docs/prints/en/prompts.png)
+
 ### Works on your phone
 
 With the PC on, open **Settings → Use on your phone**: you get an address and a 6-digit code. Open the address in your phone's browser (on the same Wi-Fi), type the code and you're in. Chats, memory and projects are the same on the PC and the phone. Use **Add to Home screen** to open it like an app.
@@ -104,7 +136,7 @@ With the PC on, open **Settings → Use on your phone**: you get an address and 
 
 ### Remembers you
 
-It saves what you tell it about yourself on its own (you can see and delete each item in Settings). You can also write instructions for every chat, pick a persona (pirate, patient teacher, soccer commentator…) or **create your own** by writing how it talks and behaves, and choose how much of the chat it remembers.
+It saves what you tell it about yourself on its own (you can see and delete each item in Settings) and **remembers your old chats**: ask "remember what we said about the trip?" and it searches your other chats. You can also write instructions for every chat, pick a persona (pirate, patient teacher, soccer commentator…) or **create your own** by writing how it talks and behaves, and choose how much of the chat it remembers.
 
 ![Settings](docs/prints/en/configuracoes.png)
 
@@ -112,7 +144,6 @@ It saves what you tell it about yourself on its own (you can see and delete each
 
 - **Attach images, PDFs and code files**: it reads them and answers about them.
 - **Voice typing**: talk and it types (runs on the PC, nothing goes to the internet).
-- **Listen** to answers read aloud.
 - **Long chats** don't "forget" the start: when memory fills up, it summarizes the old messages by itself.
 - **Math done right**: for any calculation it uses a real calculator instead of doing it in its head.
 - **Searches by itself when needed**: even with Web search off, it looks things up when the question needs something current (exchange rates, news, results) instead of making it up. You can turn this off in Settings → Automatic search.
@@ -156,8 +187,8 @@ The app is written in Portuguese, and `i18n.js` holds the English version of eve
 
 - [Ollama](https://ollama.com) runs the text model.
 - Model: [DeepSeek-V4-Pro-Qwen3.5-9B-UNCENSORED-heretic](https://huggingface.co/mradermacher/DeepSeek-V4-Pro-Qwen3.5-9B-UNCENSORED-heretic-i1-GGUF), GGUF version by mradermacher.
-- [ComfyUI](https://github.com/Comfy-Org/ComfyUI) runs the image models: [Chroma1-HD](https://huggingface.co/lodestones/Chroma1-HD), [Z-Image Turbo](https://huggingface.co/Comfy-Org/z_image_turbo) and [Stable Diffusion 1.5](https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5) with [LCM-LoRA](https://huggingface.co/latent-consistency/lcm-lora-sdv1-5). [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) makes the 2K version.
-- [faster-whisper](https://github.com/SYSTRAN/faster-whisper) does voice typing and [rembg](https://github.com/danielgatis/rembg) cuts out the stickers.
+- [ComfyUI](https://github.com/Comfy-Org/ComfyUI) runs the image models: [Chroma1-HD](https://huggingface.co/lodestones/Chroma1-HD), [Z-Image Turbo](https://huggingface.co/Comfy-Org/z_image_turbo) , [Stable Diffusion 1.5](https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5) with [LCM-LoRA](https://huggingface.co/latent-consistency/lcm-lora-sdv1-5) and [FLUX.2 klein 4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-4b-fp8) (Black Forest Labs, Apache 2.0). [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) makes the 2K version.
+- [faster-whisper](https://github.com/SYSTRAN/faster-whisper) does voice typing, [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M) (Apache 2.0, via [kokoro-onnx](https://github.com/thewh1teagle/kokoro-onnx)) is the voice and [rembg](https://github.com/danielgatis/rembg) cuts out the stickers.
 - In the `lib` folder: [marked](https://github.com/markedjs/marked) (MIT), [highlight.js](https://github.com/highlightjs/highlight.js) (BSD-3), [DOMPurify](https://github.com/cure53/DOMPurify) (Apache 2.0 / MPL 2.0) and [pdf.js](https://github.com/mozilla/pdf.js) (Apache 2.0).
 
 Each model has its own license; check each one's page before commercial use.

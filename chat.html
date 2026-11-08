@@ -689,6 +689,15 @@ body.sb-collapsed .only-collapsed { display: inline-flex; }
   #model-label .m-more { display: none; }
 }
 #mic-btn.rec { color: #fff; background: var(--danger); border-color: var(--danger); }
+#talk-btn.on { color: #fff; background: var(--accent); border-color: var(--accent); }
+.talk { position: absolute; left: 50%; bottom: calc(100% + 12px); transform: translateX(-50%); z-index: 40; display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 10px; background: var(--raised); border: 1px solid var(--line-strong); border-radius: 999px; box-shadow: 0 10px 30px rgba(0, 0, 0, .35); }
+.talk-orb { width: 42px; height: 42px; border-radius: 50%; border: 0; padding: 0; background: var(--accent); display: grid; place-items: center; cursor: pointer; transition: transform .08s linear, background .2s; }
+.talk-orb span { width: 12px; height: 12px; border-radius: 50%; background: #fff; }
+.talk[data-state="pensando"] .talk-orb { opacity: .55; animation: talk-wait 1.2s ease-in-out infinite; }
+.talk[data-state="falando"] .talk-orb { background: var(--text); animation: talk-wait 0.9s ease-in-out infinite; }
+.talk[data-state="falando"] .talk-orb span { background: var(--bg); }
+.talk-state { font-size: 14px; color: var(--text-2); min-width: 70px; }
+@keyframes talk-wait { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
 #mic-btn.busy { color: var(--accent); }
 .mic-label { font-variant-numeric: tabular-nums; }
 
@@ -790,6 +799,15 @@ body.sb-collapsed .only-collapsed { display: inline-flex; }
 }
 .field textarea:focus { border-color: var(--muted); }
 .field textarea::placeholder { color: var(--faint); }
+#tour { position: fixed; inset: 0; z-index: 200; }
+.tour-hole { position: fixed; border-radius: 12px; outline: 2px solid var(--accent); box-shadow: 0 0 0 9999px rgba(0, 0, 0, .62); pointer-events: none; }
+.tour-card { position: fixed; width: min(340px, calc(100vw - 24px)); padding: 16px 16px 12px; background: var(--raised); border: 1px solid var(--line-strong); border-radius: 14px; box-shadow: 0 16px 40px rgba(0, 0, 0, .4); }
+.tour-card h3 { margin: 0 0 6px; font-size: 16px; }
+.tour-card p { margin: 0 0 14px; color: var(--text-2); font-size: 14px; line-height: 1.5; }
+.tour-foot { display: flex; align-items: center; gap: 8px; }
+#tour-step { color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
+.pg-out { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+#pg-result { min-height: 160px; }
 .row-btns { display: flex; gap: 8px; flex-wrap: wrap; }
 
 #lightbox { cursor: zoom-out; }
@@ -842,6 +860,7 @@ body.sb-collapsed .only-collapsed { display: inline-flex; }
     <button class="nav-item" data-action="new-chat"><span data-icon="plus"></span>Novo chat</button>
     <label class="nav-item search"><span data-icon="search"></span><input id="search" type="search" placeholder="Procurar" autocomplete="off"></label>
     <button class="nav-item" data-action="open-gallery"><span data-icon="image"></span>Imagens</button>
+    <button class="nav-item" data-action="open-prompter"><span data-icon="wand"></span>Prompts</button>
     <button class="nav-item" data-action="open-projects"><span data-icon="folder"></span>Projetos</button>
   </nav>
   <div id="proj-banner" class="proj-banner" hidden></div>
@@ -880,6 +899,11 @@ body.sb-collapsed .only-collapsed { display: inline-flex; }
 
   <div id="composer-area">
     <button id="to-bottom" class="icon-btn" data-action="to-bottom" title="Ir para o fim" data-icon="down"></button>
+    <div id="talk" class="talk" hidden>
+      <button type="button" class="talk-orb" data-action="talk-tap" aria-label="Conversa por voz"><span></span></button>
+      <span class="talk-state" id="talk-state"></span>
+      <button type="button" class="icon-btn" data-action="talk-stop" title="Parar a conversa (Esc)" data-icon="x"></button>
+    </div>
     <form id="composer">
       <div id="tray" hidden></div>
       <textarea id="input" rows="1" placeholder="Como posso ajudar?"></textarea>
@@ -899,6 +923,7 @@ body.sb-collapsed .only-collapsed { display: inline-flex; }
         <span class="c-break"></span><span class="c-pad"></span>
         <span class="grow"></span>
         <button type="button" class="pill-btn" id="mic-btn" data-action="mic" title="Falar em vez de digitar (clique de novo pra parar)"><span data-icon="mic"></span><span class="mic-label" hidden></span></button>
+        <button type="button" class="pill-btn" id="talk-btn" data-action="talk" title="Conversar por voz" hidden><span data-icon="waves"></span></button>
         <button type="button" class="model-btn" data-action="open-settings" title="Mudar contexto, raciocínio e criatividade"><span id="model-label"></span><span data-icon="chevron"></span></button>
         <button type="submit" id="send" class="send" title="Enviar (Enter)" data-icon="up" disabled></button>
         <button type="button" id="stop" class="send stop" data-action="stop" title="Parar (Esc)" hidden><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor"/></svg></button>
@@ -1075,6 +1100,12 @@ body.sb-collapsed .only-collapsed { display: inline-flex; }
           <button class="btn" data-action="update-now" hidden><span data-icon="download"></span>Atualizar agora</button>
         </div>
       </div>
+      <div class="field pc-only">
+        <span class="f-label">Tour</span>
+        <div class="row-btns">
+          <button class="btn" data-action="tour-start"><span data-icon="next"></span>Ver o tour das funções</button>
+        </div>
+      </div>
       <div class="field">
         <span class="f-label">Backup das conversas</span>
         <p class="f-help" id="backup-help">Salva todas as conversas num arquivo .json. Pra recuperar, importe esse arquivo.</p>
@@ -1110,6 +1141,31 @@ body.sb-collapsed .only-collapsed { display: inline-flex; }
   </div>
 </div>
 
+<div id="prompter" class="modal" hidden>
+  <div class="dialog" role="dialog" aria-labelledby="prompter-title">
+    <div class="modal-bar">
+      <h3 id="prompter-title">Prompts</h3>
+      <button class="icon-btn" data-action="close-modal" title="Fechar (Esc)" data-icon="x"></button>
+    </div>
+    <div class="dialog-body">
+      <div class="field">
+        <textarea id="pg-input" placeholder="Descreva a cena com suas palavras"></textarea>
+      </div>
+      <div class="row-btns end">
+        <span class="grow"></span>
+        <button class="btn-primary" id="pg-go" data-action="pg-go">Gerar prompt</button>
+      </div>
+      <div id="pg-out" class="field pg-out" hidden>
+        <textarea id="pg-result" spellcheck="false"></textarea>
+        <div class="row-btns">
+          <button class="btn" data-action="pg-copy"><span data-icon="copy"></span>Copiar</button>
+          <button class="btn" data-action="pg-go"><span data-icon="refresh"></span>Outra versão</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="project-edit" class="modal" hidden>
   <div class="dialog" role="dialog" aria-labelledby="project-edit-title">
     <div class="modal-bar">
@@ -1140,6 +1196,20 @@ body.sb-collapsed .only-collapsed { display: inline-flex; }
         <span class="grow"></span>
         <button class="btn-primary" data-action="project-save">Salvar e abrir</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<div id="tour" hidden>
+  <div class="tour-hole"></div>
+  <div class="tour-card" role="dialog" aria-labelledby="tour-title">
+    <h3 id="tour-title"></h3>
+    <p id="tour-text"></p>
+    <div class="tour-foot">
+      <span id="tour-step"></span>
+      <span class="grow"></span>
+      <button class="btn" data-action="tour-skip">Pular</button>
+      <button class="btn-primary" id="tour-next" data-action="tour-next">Próximo</button>
     </div>
   </div>
 </div>
@@ -1276,6 +1346,59 @@ const CALC_TOOL = {
     parameters: { type: 'object', properties: { expressao: { type: 'string', description: L('A conta, com ponto para decimais. Ex.: (1250 * 0.15) + 3^2, sqrt(2), 15% de 300, round(10/3, 2)', 'The math, with a dot for decimals. E.g. (1250 * 0.15) + 3^2, sqrt(2), 15% of 300, round(10/3, 2)') } }, required: ['expressao'] }
   }
 };
+const PHOTO_TOOL = {
+  type: 'function',
+  function: {
+    name: 'editar_foto',
+    description: L('Edita a foto mais recente que o usuário mandou nesta conversa, do jeito pedido: mudar a cor da roupa, gesto, pose, expressão, fundo, estilo, colocar ou tirar algo. O resto da foto continua igual.',
+      'Edits the most recent photo the user sent in this chat as asked: change clothes color, gesture, pose, expression, background, style, add or remove something. The rest of the photo stays the same.'),
+    parameters: { type: 'object', properties: {
+      pedido: { type: 'string', description: L('O que mudar, em inglês, numa frase direta. Ex.: "Make the person make a peace sign with their right hand." Com duas fotos, chame a foto a editar de image 1 e a outra de image 2: "Put the logo from image 2 on the shirt of the person in image 1."', 'What to change, in English, in one direct sentence. E.g. "Make the person make a peace sign with their right hand." With two photos, call the photo to edit image 1 and the other image 2: "Put the logo from image 2 on the shirt of the person in image 1."') },
+      referencia: { type: 'boolean', description: L('true quando o usuário mandou também a foto de uma coisa pra colocar na foto dele (logo, estampa, objeto, roupa).', 'true when the user also sent a photo of something to put into their photo (logo, print, object, clothes).') },
+      original: { type: 'boolean', description: L('true quando ele pede o contrário de uma edição que você já fez (emagrecer depois de engordar, engordar depois de emagrecer, voltar como era): aí a edição parte da foto que ele mandou, sem as suas edições.', 'true when they ask for the opposite of an edit you already made (thinner after fatter, fatter after thinner, back to how it was): then the edit starts from the photo they sent, without your edits.') }
+    }, required: ['pedido'] }
+  }
+};
+// Which photos an edit uses. Edits continue from the newest version: the last photo sent or the last edited one.
+// With a reference, the newest photo sent is the thing to put in, and it goes on the version before it.
+// The editor can't take a lot of weight off (or put it on) a body it already changed: going the other way starts
+// from the last version before those edits
+const BODY_FAT = /\b(obese|fat|fatter|fattest|chubby|chubbier|overweight|heavier|plump)\b/i;
+const BODY_THIN = /\b(thin|thinner|skinny|skinnier|slim|slimmer|lean|leaner|bony|skeletal|emaciated)\b/i;
+function bodyUndo(pedido) {
+  const t = String(pedido || '');
+  if (BODY_THIN.test(t) && !BODY_FAT.test(t)) return BODY_FAT;
+  if (BODY_FAT.test(t) && !BODY_THIN.test(t)) return BODY_THIN;
+  return null;
+}
+function photosFor(chat, withRef, fromOriginal, pedido) {
+  const msgs = chat?.messages || [];
+  const versions = []; // in conversation order: { data } for photos sent, { file, prompt } for edited results
+  msgs.forEach((m, i) => {
+    if (m.role === 'user') for (const d of m.images || []) versions.push({ data: d, msg: i });
+    else for (const g of m.genImages || []) if (g.fonte && g.file && (g.kind || 'image') === 'image') versions.push({ file: g.file, prompt: g.prompt, msg: i });
+  });
+  if (!versions.length) return {};
+  const at = msgs.findLastIndex(m => m.role === 'user' && m.images?.length);
+  if (fromOriginal && !withRef && at >= 0) return { main: { data: msgs[at].images[0] } };
+  const undo = !withRef && bodyUndo(pedido);
+  if (undo) {
+    let k = versions.length - 1;
+    while (k > 0 && versions[k].file && undo.test(versions[k].prompt || '')) k--;
+    return { main: versions[k] };
+  }
+  if (!withRef) return { main: versions.at(-1) };
+  if (at < 0) return { main: versions.at(-1) };
+  const sent = msgs[at].images;
+  if (sent.length >= 2) return { main: { data: sent[0] }, ref: { data: sent[1] } };
+  const before = versions.filter(v => v.msg < at).at(-1);
+  return before ? { main: before, ref: { data: sent[0] } } : { main: { data: sent[0] } };
+}
+// The most recent photo the person attached in this chat (what editar_foto edits)
+function lastPhoto(chat) {
+  const m = [...(chat?.messages || [])].reverse().find(x => x.role === 'user' && x.images?.length);
+  return m ? m.images[m.images.length - 1] : null;
+}
 const IMAGE_TOOL = {
   type: 'function',
   function: {
@@ -1370,6 +1493,7 @@ const ICONS = {
   code: '<path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/>',
   calc: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01M8 18h.01M12 18h.01M16 18h.01"/>',
   mic: '<rect width="6" height="12" x="9" y="2" rx="3"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 18v4"/>',
+  waves: '<path d="M2 10v3"/><path d="M6 6v11"/><path d="M10 3v18"/><path d="M14 8v7"/><path d="M18 5v13"/><path d="M22 10v3"/>',
   printer: '<path d="M6 9V3h12v6"/><rect width="16" height="8" x="4" y="9" rx="2"/><path d="M7 17h10v4H7z"/>',
   type: '<path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/>',
   wand: '<path d="m15 4 5 5"/><path d="M4 20 15 9"/><path d="M19 3v2"/><path d="M21 5h-2"/><path d="M5 3v2"/><path d="M6 4H4"/>',
@@ -1395,6 +1519,7 @@ const mobile = matchMedia('(max-width: 820px)');
 let chats = [];
 let currentId = null;
 let generating = false;
+let liveGen = null; // { chatId, el }: the answer being written, put back when its chat is drawn again
 let abortCtl = null;
 let stick = true;
 let editingIndex = null;
@@ -1921,6 +2046,7 @@ function renderModelBtn() {
   renderImgOpts();
   $('#web-depth').hidden = !settings.web;
   $('#web-depth').value = settings.webDeep ? 'deep' : 'quick';
+  updatePlaceholder();
 }
 // One small button next to "Image" with the model, style and how many images, all in one menu
 const currentImageModel = () => (imageModels.some(m => m.key === settings.imageModel) ? settings.imageModel : imageModels[0]?.key);
@@ -1936,7 +2062,7 @@ function renderImgOpts() {
   const btn = (key, value, on, label) => `<button type="button" data-action="img-opt" data-k="${key}" data-v="${esc(String(value))}"${on ? ' class="on"' : ''}>${label}</button>`;
   let html = '';
   if (many) {
-    html += `<div class="pop-title">${L('Modelo', 'Model')}</div>` + imageModels.map(m => {
+    html += `<div class="pop-title">${L('Criar imagens com', 'Create images with')}</div>` + imageModels.map(m => {
       const lb = IMAGE_MODEL_LABELS[m.key];
       const on = m.key === model;
       return btn('imageModel', m.key, on, `<span>${esc(lb?.name || m.name)}${lb ? `<small>${esc(lb.note)}</small>` : ''}</span>${on ? I('check') : ''}`);
@@ -2013,6 +2139,110 @@ async function toggleMic() {
     input.focus();
   };
   mr.start();
+}
+
+// ---------- voice conversation: listen -> transcribe -> short answer -> speak -> listen again ----------
+let talk = null; // { stream, ctx, an, rec, timer, state }
+function talkState(state) {
+  if (!talk) return;
+  talk.state = state;
+  $('#talk').dataset.state = state;
+  $('#talk-state').textContent = tr({ ouvindo: 'Ouvindo', pensando: 'Pensando', falando: 'Falando' }[state]);
+  $('#talk .talk-orb').style.transform = '';
+}
+function micLevel(an) {
+  const d = new Float32Array(an.fftSize);
+  an.getFloatTimeDomainData(d);
+  let sum = 0;
+  for (const v of d) sum += v * v;
+  return Math.sqrt(sum / d.length);
+}
+async function startTalk() {
+  if (talk) { stopTalk(); return; }
+  if (generating) { toast('Espere a resposta terminar (ou aperte Esc pra parar).'); return; }
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+  } catch {
+    toast('Não deu pra usar o microfone. Libere o acesso no ícone de cadeado/câmera do navegador.', 5000);
+    return;
+  }
+  stopSpeaking();
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const an = ctx.createAnalyser();
+  an.fftSize = 2048;
+  ctx.createMediaStreamSource(stream).connect(an);
+  talk = { stream, ctx, an };
+  localApi('/api/voice-ready', {}); // loads the transcription and the voice now, while the person starts talking
+  $('#talk').hidden = false;
+  $('#talk-btn').classList.add('on');
+  talkListen();
+}
+function stopTalk() {
+  if (!talk) return;
+  const t = talk;
+  talk = null;
+  clearInterval(t.timer);
+  if (t.rec && t.rec.state !== 'inactive') t.rec.stop();
+  t.stream.getTracks().forEach(x => x.stop());
+  t.ctx.close().catch(() => {});
+  stopSpeaking();
+  $('#talk').hidden = true;
+  $('#talk-btn').classList.remove('on');
+}
+// Records until the person stops talking for a moment, then sends what they said
+function talkListen() {
+  const t = talk;
+  if (!t) return;
+  talkState('ouvindo');
+  const type = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : '';
+  const rec = new MediaRecorder(t.stream, type ? { mimeType: type } : undefined);
+  const chunks = [];
+  t.rec = rec;
+  rec.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+  const t0 = performance.now();
+  const orb = $('#talk .talk-orb');
+  let noise = 0.004, spoke = false, last = 0, loudFor = 0;
+  t.timer = setInterval(() => {
+    if (talk !== t) return;
+    const now = performance.now();
+    const v = micLevel(t.an);
+    orb.style.transform = `scale(${1 + Math.min(0.6, v * 10)})`;
+    if (!spoke && now - t0 < 400) { noise = Math.max(noise, v); return; } // the room's own noise
+    if (v > Math.max(0.015, noise * 3)) { loudFor += 1; if (loudFor >= 2) { spoke = true; last = now; } } else loudFor = 0;
+    const done = (spoke && now - last > 1300) || (!spoke && now - t0 > 20000) || now - t0 > 60000;
+    if (done) { clearInterval(t.timer); rec.stop(); }
+  }, 80);
+  rec.onstop = async () => {
+    if (talk !== t) return;
+    if (!spoke) { talkListen(); return; }
+    talkState('pensando');
+    let r;
+    try {
+      const res = await fetch('/api/transcribe', { method: 'POST', headers: { 'X-Chat': '1', 'X-Lang': LANG, 'Content-Type': rec.mimeType || 'audio/webm' }, body: new Blob(chunks, { type: rec.mimeType || 'audio/webm' }) });
+      r = await res.json();
+    } catch {
+      r = { error: 'o servidor do chat não respondeu' };
+    }
+    if (talk !== t) return;
+    const text = (r.text || '').trim();
+    if (r.error || !text) { if (r.error) toast(`Não deu pra transcrever: ${r.error}`); talkListen(); return; }
+    await sendMessage(text, { voice: true });
+    if (talk !== t) return;
+    const chat = current();
+    const i = (chat?.messages.length || 0) - 1;
+    const m = chat?.messages[i];
+    const say = m?.role === 'assistant' ? speechText(splitMsg(m).answer) : '';
+    if (say) {
+      talkState('falando');
+      speaking = i;
+      markSpeaking();
+      const done = await speakWithKokoro(say);
+      if (done && speaking === i) { speaking = null; markSpeaking(); }
+    }
+    if (talk === t) talkListen();
+  };
+  rec.start(250);
 }
 
 // ---------- export ----------
@@ -2148,6 +2378,11 @@ async function addFiles(list) {
 }
 function fileIcon(name) { return `<span class="file-icon">${esc(extOf(name).slice(0, 4) || 'txt')}</span>`; }
 function fileSub(f) { return f.pages ? `PDF · ${f.pages} ${f.pages === 1 ? 'página' : 'páginas'}` : fmtSize(f.size ?? f.text.length); }
+// With Image on, attaching a photo turns the box into "what to change in it": editing needs no menu or model choice
+function updatePlaceholder() {
+  const photo = settings.image && features.photo_edit && pending.some(a => a.kind === 'image');
+  input.placeholder = photo ? 'O que mudar na foto?' : current() ? 'Responder…' : 'Como posso ajudar?';
+}
 function renderTray() {
   const tray = $('#tray');
   tray.hidden = !pending.length;
@@ -2155,6 +2390,7 @@ function renderTray() {
     ? `<div class="att img" title="${esc(a.name)}"><img src="${esc(a.data)}" alt=""><button type="button" class="att-x" data-action="unattach" data-i="${i}" title="Remover">${I('x')}</button></div>`
     : `<div class="att" title="${esc(a.name)}">${fileIcon(a.name)}<div class="att-meta"><span class="att-name">${esc(a.name)}</span><span class="att-size">${esc(fileSub(a))}</span></div><button type="button" class="att-x" data-action="unattach" data-i="${i}" title="Remover">${I('x')}</button></div>`
   ).join('');
+  updatePlaceholder();
 }
 function fence(text) {
   const runs = text.match(/`+/g) || [];
@@ -2173,7 +2409,7 @@ function userContent(m) {
 function toApi(m, vision) {
   if (m.role === 'assistant') {
     const answer = splitMsg(m).answer;
-    const shots = (m.steps || []).filter(s => s.type === 'image' && s.prompt && !s.error);
+    const shots = (m.steps || []).filter(s => (s.type === 'image' || s.type === 'photo') && s.prompt && !s.error);
     if (!shots.length) {
       const seen = new Set();
       for (const g of m.genImages || []) if ((g.kind || 'image') === 'image' && g.prompt && !seen.has(g.prompt)) { seen.add(g.prompt); shots.push({ prompt: g.prompt, formato: g.formato }); }
@@ -2182,8 +2418,12 @@ function toApi(m, vision) {
     // Past images are shown to the model the way they really happened (it called the tool and the image appeared),
     // so it keeps calling the tool instead of imitating a text note
     return [
-      { role: 'assistant', content: answer, tool_calls: shots.map(s => ({ function: { name: 'gerar_imagem', arguments: { descricao: s.prompt, formato: s.formato || 'quadrado' } } })) },
-      ...shots.map(() => ({ role: 'tool', tool_name: 'gerar_imagem', content: L('A imagem foi gerada e já está aparecendo para o usuário.', 'The image was created and is already showing to the user.') }))
+      { role: 'assistant', content: answer, tool_calls: shots.map(s => (s.type === 'photo'
+        ? { function: { name: 'editar_foto', arguments: { pedido: s.prompt } } }
+        : { function: { name: 'gerar_imagem', arguments: { descricao: s.prompt, formato: s.formato || 'quadrado' } } })) },
+      ...shots.map(s => (s.type === 'photo'
+        ? { role: 'tool', tool_name: 'editar_foto', content: L('A foto editada já está aparecendo para o usuário.', 'The edited photo is already showing to the user.') }
+        : { role: 'tool', tool_name: 'gerar_imagem', content: L('A imagem foi gerada e já está aparecendo para o usuário.', 'The image was created and is already showing to the user.') }))
     ];
   }
   const out = { role: 'user', content: userContent(m) };
@@ -2223,6 +2463,14 @@ function systemPrompt(web, img, chat, extra = {}) {
     parts.push(L('Contas: nunca faça contas de cabeça, nem enquanto pensa. Sempre que a resposta tiver um número que precisa ser calculado (soma, porcentagem, desconto, juros, média, conversão), chame a ferramenta calcular antes de responder, com a conta inteira numa expressão só, e use exatamente o resultado dela.',
       'Math: never do math in your head, not even while thinking. Whenever the answer has a number that needs calculating (sum, percentage, discount, interest, average, conversion), call the calcular tool before answering, with the whole calculation in one expression, and use exactly its result.'));
   }
+  if (extra.voice) {
+    parts.push(L('Conversa por voz: o usuário está falando com você e vai ouvir a resposta. Responda curto (1 a 3 frases), como numa conversa falada, sem listas, títulos, tabelas, código, links nem emojis.',
+      'Voice conversation: the user is talking to you and will hear the answer. Answer briefly (1 to 3 sentences), like in a spoken conversation, without lists, headings, tables, code, links or emojis.'));
+  }
+  if (extra.recall) {
+    parts.push(L('Conversas antigas: você não lembra sozinho das outras conversas, mas a ferramenta lembrar_conversas procura nelas. Chame ela ANTES de responder quando o usuário falar de algo de outra conversa ("lembra...", "aquilo que falamos", "como eu te disse") ou perguntar algo da vida dele (nome do pet, família, trabalho, planos, algo que ele te contou). Nunca diga que não sabe ou ofereça procurar: procure direto. Responda só com o que os trechos dizem e diga de qual conversa veio; se não achar, diga que não encontrou, sem inventar.',
+      'Old chats: you do not remember other chats by yourself, but the lembrar_conversas tool searches them. Call it BEFORE answering when the user mentions something from another chat ("remember...", "what we talked about", "like I told you") or asks about their own life (their pet name, family, work, plans, something they told you). Never say you do not know or offer to search: just search. Answer only with what the parts say and say which chat it came from; if nothing is found, say so without making anything up.'));
+  }
   if (web) {
     parts.push(L('Internet: você tem as ferramentas pesquisar_na_web e abrir_pagina. Use quando a pergunta depender de algo atual (preços, notícias, lançamentos, resultados) ou que você não sabe com certeza: pesquise, abra as páginas mais úteis e só então responda. No fim, liste os links que usou.',
       'Web: you have the pesquisar_na_web and abrir_pagina tools. Use them when the question depends on something current (prices, news, releases, results) or that you do not know for sure: search, open the most useful pages and only then answer. At the end, list the links you used.'));
@@ -2237,17 +2485,63 @@ function systemPrompt(web, img, chat, extra = {}) {
     parts.push(L('Este PC não tem criação de imagens instalada. Se o usuário pedir uma imagem, diga que dá pra instalar em Configurações > Modelos de imagem. Nunca diga que criou uma imagem.',
       'This PC has no image creation installed. If the user asks for an image, tell them it can be installed in Settings > Image models. Never say you created an image.'));
   }
+  if (extra.photo) {
+    parts.push(L(`Fotos: o usuário mandou uma foto nesta conversa e você pode editá-la com a ferramenta editar_foto.
+- Quando ele pedir pra mudar algo NA FOTO dele (cor da roupa, gesto, pose, expressão, fundo, estilo, colocar ou tirar algo), chame editar_foto. Não use gerar_imagem pra isso.
+- O pedido vai em inglês e precisa ser detalhado, porque o editor só faz o que estiver escrito: diga exatamente o que mudar, onde, de que tamanho e de que jeito, e termine com "Keep ... exactly the same" listando o que aparece na foto e deve continuar igual (rosto, óculos, cabelo, roupa, fundo...).
+- Na lista do "Keep", só nomeie as coisas ("the face", "the hand", "the cat"), sem descrevê-las, e nunca coloque nela o que você está mudando.
+- Gestos: copie a frase pronta do gesto pedido, sem misturar com a de outro gesto. Se na foto a mão não estiver levantada, troque o começo "Change the person's raised hand into" por "Make the person raise their right hand next to their face, making".
+  Se pedir "L" ou "faz o L" (indicador pra cima e polegar pro lado): "Change the person's raised hand into an L hand sign: index finger pointing straight up, thumb pointing straight out to the side at a right angle, the other three fingers curled into the palm."
+  Se pedir "paz", "paz e amor" ou "V" (dois dedos): "Change the person's raised hand into a peace sign (V sign): index and middle fingers both pointing straight up and spread apart in a V, ring and little fingers folded down and held by the thumb."
+  Se pedir "joinha", "positivo" ou "polegar pra cima" (só o polegar, NÃO é o L): "Change the person's raised hand into a thumbs-up gesture: all four fingers curled tightly into a fist with no finger pointing up, and the thumb sticking straight up."
+  Se pedir "chifrinho" ou "rock" (indicador e mindinho): "Change the person's raised hand into a rock horns sign: index and little fingers pointing straight up, middle and ring fingers folded down under the thumb."
+  Se pedir "coração" com as mãos: "Make the person hold both hands together in front of the chest forming a heart shape: fingers curved and touching at the top, thumbs touching at the bottom."
+- Corpo e intensidade: diga o tamanho da mudança com palavras fortes e detalhes do corpo, nunca suavize. "Muito gordo" ou "obeso": "Make the person extremely obese: a much wider body, a huge round belly, very thick arms, neck and legs, a big double chin and a round chubby face." "Muito magro": "Make the person extremely thin: a very skinny, bony body, narrow shoulders, thin arms and neck, hollow cheeks and a sharp jawline." Gordo pra magro ou magro pra gordo: diga as duas coisas, o que some e o que fica ("the big belly is gone, flat stomach"). Se ele pedir "mais ainda", peça claramente mais do que a foto atual já mostra e afaste um pouco a câmera pro corpo aparecer: "Zoom out a little and make the person enormously obese, far fatter than now: a gigantic belly, a body so wide it fills the seat, huge arms, a thick neck and very puffy cheeks." Magro: "Zoom out a little and make the person far skinnier than now, almost skeletal: ...". Se ele pedir o contrário do que você já fez (emagrecer depois de engordar), use original=true e descreva a mudança a partir da foto que ele mandou. Em mudanças de corpo, não use as frases dos gestos e coloque no "Keep" as mãos que aparecem (ex.: "the raised hand").
+- Logos e estampas: uma cópia só, num lugar exato (ex.: "on the left side of the chest of the t-shirt"), no tamanho real (ex.: "about the size of a palm"), "printed on the fabric, following its folds and the photo's lighting".
+- Olhe a foto antes de escrever. O pedido e o "Keep" falam só do que aparece NESTA foto: se a pessoa não usa óculos, não fale de óculos; se ela segura um bicho ou um objeto, coloque ele no "Keep".
+- Exemplos de OUTRAS fotos (não copie as coisas do "Keep" deles):
+  Homem de gorro e óculos escuros, com a mão levantada: "Change the person's raised hand into an L hand sign: index finger pointing straight up, thumb pointing straight out to the side at a right angle, the other three fingers curled into the palm. Same skin and lighting. Keep the face, sunglasses, beanie, t-shirt and background exactly the same."
+  Mulher de cabelo cacheado e jaqueta jeans, com as mãos abaixadas segurando um copo: "Make the person raise their right hand next to their face, making a thumbs-up gesture: all four fingers curled tightly into a fist with no finger pointing up, and the thumb sticking straight up. Same skin and lighting. Keep the face, curly hair, denim jacket, the cup in the other hand and background exactly the same."
+- Se ele mandou também a foto de uma coisa pra colocar na foto dele (logo, estampa, objeto, roupa), use referencia=true e, no pedido, chame a foto dele de image 1 e a coisa de image 2.
+- "Me coloca nessa cena" (a foto dele e a foto de um lugar): use referencia=true. Se as duas vieram na mesma mensagem, image 1 é a primeira e image 2 a segunda; se não, image 1 é a foto dele e image 2 a foto nova. Descreva a pessoa e o lugar pra não confundir. Ex.: "Place the man from image 1 into the street scene from image 2: he is standing in the street, seen from the waist up, facing the camera, with the Eiffel Tower behind him. Same face, black beanie, sunglasses, beard and blue t-shirt, lit by the same sunlight as the scene. The background is the street, cafes and Eiffel Tower of image 2."
+- "Melhora essa foto" (borrada, pequena, antiga, com ruído): "Restore and enhance this photo: make it sharp, clear and high resolution, remove the blur, noise and JPEG artifacts, with natural skin texture and fine details. Keep the face, expression, clothes, colors and background exactly the same." Foto antiga em preto e branco continua em preto e branco, a não ser que ele peça cor.
+- Antes de chamar, escreva uma frase curta anunciando a edição. Depois da foto, não escreva mais nada.`,
+      `Photos: the user sent a photo in this chat and you can edit it with the editar_foto tool.
+- When they ask to change something IN their photo (clothes color, gesture, pose, expression, background, style, add or remove something), call editar_foto. Do not use gerar_imagem for that.
+- The request is in English and must be detailed, because the editor only does what is written: say exactly what to change, where, how big and how, and end with "Keep ... exactly the same" listing what is in the photo and must stay the same (face, glasses, hair, clothes, background...).
+- In the "Keep" list, only name things ("the face", "the hand", "the cat") without describing them, and never put in it what you are changing.
+- Gestures: copy the ready-made sentence of the requested gesture, without mixing it with another gesture's. If the hand is not raised in the photo, replace the start "Change the person's raised hand into" with "Make the person raise their right hand next to their face, making".
+  L: "Change the person's raised hand into an L hand sign: index finger pointing straight up, thumb pointing straight out to the side at a right angle, the other three fingers curled into the palm."
+  Peace: "Change the person's raised hand into a peace sign (V sign): index and middle fingers both pointing straight up and spread apart in a V, ring and little fingers folded down and held by the thumb."
+  Thumbs up (only the thumb, NOT the L): "Change the person's raised hand into a thumbs-up gesture: all four fingers curled tightly into a fist with no finger pointing up, and the thumb sticking straight up."
+  Rock: "Change the person's raised hand into a rock horns sign: index and little fingers pointing straight up, middle and ring fingers folded down under the thumb."
+  Heart: "Make the person hold both hands together in front of the chest forming a heart shape: fingers curved and touching at the top, thumbs touching at the bottom."
+- Body and intensity: say how big the change is with strong words and body details, never soften it. "Very fat" or "obese": "Make the person extremely obese: a much wider body, a huge round belly, very thick arms, neck and legs, a big double chin and a round chubby face." "Very thin": "Make the person extremely thin: a very skinny, bony body, narrow shoulders, thin arms and neck, hollow cheeks and a sharp jawline." Fat to thin or thin to fat: say both, what goes away and what it becomes ("the big belly is gone, flat stomach"). If they ask for "even more", clearly ask for more than the current photo already shows and pull the camera back a little so the body shows: "Zoom out a little and make the person enormously obese, far fatter than now: a gigantic belly, a body so wide it fills the seat, huge arms, a thick neck and very puffy cheeks." Thin: "Zoom out a little and make the person far skinnier than now, almost skeletal: ...". If they ask for the opposite of what you already did (thinner after fatter), use original=true and describe the change from the photo they sent. In body changes, do not use the gesture sentences and put the hands that show in the "Keep" (e.g. "the raised hand").
+- Logos and prints: one copy only, in an exact place (e.g. "on the left side of the chest of the t-shirt"), at a real size (e.g. "about the size of a palm"), "printed on the fabric, following its folds and the photo's lighting".
+- Look at the photo before writing. The request and the "Keep" only talk about what is in THIS photo: if the person wears no glasses, do not mention glasses; if they hold an animal or an object, put it in the "Keep".
+- Examples from OTHER photos (do not copy the things in their "Keep"):
+  Man with a beanie and sunglasses, hand raised: "Change the person's raised hand into an L hand sign: index finger pointing straight up, thumb pointing straight out to the side at a right angle, the other three fingers curled into the palm. Same skin and lighting. Keep the face, sunglasses, beanie, t-shirt and background exactly the same."
+  Woman with curly hair and a denim jacket, hands down holding a cup: "Make the person raise their right hand next to their face, making a thumbs-up gesture: all four fingers curled tightly into a fist with no finger pointing up, and the thumb sticking straight up. Same skin and lighting. Keep the face, curly hair, denim jacket, the cup in the other hand and background exactly the same."
+- If they also sent a photo of something to put into their photo (logo, print, object, clothes), use referencia=true and, in the request, call their photo image 1 and the thing image 2.
+- "Put me in this scene" (their photo and a photo of a place): use referencia=true. If both came in the same message, image 1 is the first and image 2 the second; if not, image 1 is their photo and image 2 the new photo. Describe the person and the place so they are not mixed up. E.g. "Place the man from image 1 into the street scene from image 2: he is standing in the street, seen from the waist up, facing the camera, with the Eiffel Tower behind him. Same face, black beanie, sunglasses, beard and blue t-shirt, lit by the same sunlight as the scene. The background is the street, cafes and Eiffel Tower of image 2."
+- "Improve this photo" (blurry, small, old, noisy): "Restore and enhance this photo: make it sharp, clear and high resolution, remove the blur, noise and JPEG artifacts, with natural skin texture and fine details. Keep the face, expression, clothes, colors and background exactly the same." An old black and white photo stays black and white, unless they ask for color.
+- Before calling it, write a short sentence announcing the edit. After the photo, do not write anything else.`));
+  }
   if (img) {
     parts.push(L(`Imagens: você cria imagens com a ferramenta gerar_imagem.
 - Quando pedirem uma imagem, chame a ferramenta. Nunca diga que não consegue e nunca só descreva a imagem em texto.
 - Antes de chamar, escreva uma frase curta e divertida anunciando o que vai criar. Depois da imagem, não escreva mais nada.
 - A descrição vai em inglês, bem detalhada e visual. Capriche no humor quando combinar: expressões exageradas, situações absurdas, detalhes engraçados no fundo.
+- Intensidade: mantenha a força de cada palavra do pedido ("muito", "extremamente", "gigante", letras maiúsculas) e nunca suavize. Comece a descrição pela característica principal e mostre ela com detalhes concretos do corpo. Ex.: "gordo" é "a fat man with a big belly"; "muito gordo" ou "obeso" é "an extremely obese, morbidly obese man, enormous round belly hanging over his belt, very wide body, thick arms and legs, double chin, round chubby face". Vale pra tudo: muito magro, muito musculoso, muito velho, muito alto, muito cabeludo...
+- "Mais ... ainda": a descrição é sempre a cena inteira, nunca uma ordem como "Make him...". Copie a sua última descrição desta conversa completa (mesma pessoa, roupa, lugar, estilo e enquadramento) e troque só a característica pedida por uma versão bem mais forte, com detalhes mais exagerados (ex.: obese -> morbidly obese -> the fattest man in the world, gigantic belly down to his knees). A diferença tem que ficar óbvia na imagem.
 - Texto na imagem só quando pedirem meme, legenda ou algo escrito. Aí a descrição tem só a cena, sem nenhuma letra, e o texto vai em texto_cima e texto_baixo (curto, em português, com a piada).
 - Nas outras imagens, deixe texto_cima e texto_baixo vazios e não peça letreiro, placa, palavra ou número escrito na cena.`,
       `Images: you create images with the gerar_imagem tool.
 - When asked for an image, call the tool. Never say you cannot and never just describe the image in text.
 - Before calling it, write a short, fun sentence announcing what you will create. After the image, do not write anything else.
 - The description is in English, very detailed and visual. Go for humor when it fits: exaggerated expressions, absurd situations, funny details in the background.
+- Intensity: keep the strength of every word in the request ("very", "extremely", "huge", capital letters) and never soften it. Start the description with the main trait and show it with concrete body details. E.g. "fat" is "a fat man with a big belly"; "very fat" or "obese" is "an extremely obese, morbidly obese man, enormous round belly hanging over his belt, very wide body, thick arms and legs, double chin, round chubby face". The same goes for anything: very thin, very muscular, very old, very tall, very hairy...
+- "Even more ...": the description is always the whole scene, never an order like "Make him...". Copy your last description in this chat in full (same person, clothes, place, style and framing) and only replace the requested trait with a much stronger version, with more exaggerated details (e.g. obese -> morbidly obese -> the fattest man in the world, gigantic belly down to his knees). The difference must be obvious in the image.
 - Text on the image only when asked for a meme, caption or something written. Then the description has only the scene, without any letters, and the text goes in texto_cima and texto_baixo (short, in English, with the joke).
 - For other images, leave texto_cima and texto_baixo empty and do not ask for any sign, plaque, word or number written in the scene.`));
   }
@@ -2269,8 +2563,8 @@ function toJpeg(dataUrl, max = 1280, quality = 0.9) {
   });
 }
 const IMG_ACTIONS = {
-  again: { path: '/api/image', label: 'Outra versão', verb: 'Gerando', body: g => ({ prompt: g.prompt, formato: g.formato, modelo: g.modelo || 'zimage' }) },
-  hd: { path: '/api/upscale', label: '2K', verb: 'Gerando 2K', kind: 'hd', body: g => ({ file: g.file }) },
+  again: { path: g => (g.fonte ? '/api/edit-photo' : '/api/image'), label: 'Outra versão', verb: 'Gerando', body: g => (g.fonte ? { fonte: g.fonte, fonte2: g.fonte2 || undefined, pedido: g.prompt } : { prompt: g.prompt, formato: g.formato, modelo: g.modelo || 'zimage' }) },
+  hd: { path: '/api/upscale', label: '2K', verb: 'Gerando 2K', kind: 'hd', body: g => ({ file: g.file, modelo: g.modelo }) },
   sticker: { path: '/api/sticker', label: 'Figurinha', verb: 'Recortando', kind: 'sticker', body: g => ({ file: g.file }) }
 };
 function loadImg(src) {
@@ -2369,7 +2663,12 @@ function genFigure(g, i, j) {
     || (g.edited ? '<span class="gen-badge">Editada</span>' : '');
   let tools = '';
   if (i !== undefined) {
-    const act = (type, icon) => `<button class="tool" data-action="img-action" data-type="${type}" data-i="${i}" data-j="${j}">${I(icon)}<span>${IMG_ACTIONS[type].label}</span></button>`;
+    const act = (type, icon) => {
+      const at = busyImg.get(`${currentId}:${i}:${j}:${type}`);
+      return at
+        ? `<button class="tool" disabled data-busy-at="${at}" data-verb="${esc(IMG_ACTIONS[type].verb)}">${I(icon)}<span>${esc(IMG_ACTIONS[type].verb)}… ${fmtCount((performance.now() - at) / 1000)}</span></button>`
+        : `<button class="tool" data-action="img-action" data-type="${type}" data-i="${i}" data-j="${j}">${I(icon)}<span>${IMG_ACTIONS[type].label}</span></button>`;
+    };
     const btn = (action, icon, label) => `<button class="tool" data-action="${action}" data-i="${i}" data-j="${j}">${I(icon)}<span>${label}</span></button>`;
     tools = `<figcaption>
       ${kind === 'image' ? act('again', 'refresh') : ''}
@@ -2392,21 +2691,44 @@ function startButtonTimer(btn, verb) {
   const timer = setInterval(count, 1000);
   return () => { clearInterval(timer); btn.disabled = false; label.textContent = original; };
 }
+// Image buttons that are working: "chatId:i:j:type" -> when they started, so the timer survives redrawing the chat
+const busyImg = new Map();
+let busyTimer = null;
+function tickBusy() {
+  for (const b of document.querySelectorAll('[data-busy-at]')) {
+    b.querySelector('span').textContent = `${b.dataset.verb}… ${fmtCount((performance.now() - Number(b.dataset.busyAt)) / 1000)}`;
+  }
+  if (!busyImg.size) { clearInterval(busyTimer); busyTimer = null; }
+}
 async function imageAction(type, i, j, btn) {
   const chat = current();
   const m = chat?.messages[i];
   const g = m?.genImages?.[j];
   const spec = IMG_ACTIONS[type];
-  if (!g || !spec || btn.disabled) return;
-  const done = startButtonTimer(btn, spec.verb);
-  const r = await localApi(spec.path, spec.body(g));
-  done();
-  if (r.error) { toast(`Não deu certo: ${r.error}`); return; }
+  const key = `${chat?.id}:${i}:${j}:${type}`;
+  if (!g || !spec || btn.disabled || busyImg.has(key)) return;
+  const at = performance.now();
+  busyImg.set(key, at);
+  Object.assign(btn.dataset, { busyAt: at, verb: spec.verb });
+  btn.disabled = true;
+  tickBusy();
+  if (!busyTimer) busyTimer = setInterval(tickBusy, 1000);
+  let r;
+  try {
+    r = await localApi(typeof spec.path === 'function' ? spec.path(g) : spec.path, spec.body(g));
+  } finally {
+    busyImg.delete(key);
+  }
+  if (r.error) {
+    toast(`Não deu certo: ${r.error}`);
+    if (chat.id === currentId) renderThread(false);
+    return;
+  }
   if (type === 'sticker') {
     m.genImages.push({ src: r.image, prompt: g.prompt, formato: g.formato, file: r.file, seconds: r.seconds, kind: 'sticker' });
   } else {
     const base = await toJpeg(r.image, type === 'hd' ? 2048 : 1280, 0.9);
-    m.genImages.push({ ...(await withMemeText(base, g.top, g.bottom)), prompt: g.prompt, formato: g.formato, file: r.file, seconds: r.seconds, kind: spec.kind, modelo: r.model || g.modelo });
+    m.genImages.push({ ...(await withMemeText(base, g.top, g.bottom)), prompt: g.prompt, formato: g.formato, file: r.file, seconds: r.seconds, kind: spec.kind, modelo: r.model || g.modelo, fonte: r.source || g.fonte, fonte2: r.source2 || g.fonte2 });
   }
   saveChat(chat);
   if (chat.id === currentId) renderThread(false);
@@ -2431,7 +2753,7 @@ async function rewritePrompt(original, change) {
       model: MODELS[modelKey].id,
       stream: false,
       think: false,
-      messages: [{ role: 'user', content: L(`Esta é a descrição em inglês de uma imagem gerada por IA:\n"${original}"\n\nO usuário quer esta mudança: "${change}"\n\nEscreva a nova descrição completa em inglês, mantendo tudo o que já existe na imagem e aplicando a mudança. Não coloque texto nem letras na imagem. Responda só com a descrição, sem aspas.`, `This is the English description of an AI-generated image:\n"${original}"\n\nThe user wants this change: "${change}"\n\nWrite the new full description in English, keeping everything already in the image and applying the change. Do not put text or letters on the image. Answer only with the description, without quotes.`) }],
+      messages: [{ role: 'user', content: L(`Esta é a descrição em inglês de uma imagem gerada por IA:\n"${original}"\n\nO usuário quer esta mudança: "${change}"\n\nEscreva a nova descrição completa em inglês, mantendo tudo o que já existe na imagem e aplicando a mudança. Se a mudança pede mais intensidade ("mais", "muito", "ainda mais"), use palavras bem mais fortes que as da descrição atual, com detalhes concretos, e coloque essa característica no começo. Não coloque texto nem letras na imagem. Responda só com a descrição, sem aspas.`, `This is the English description of an AI-generated image:\n"${original}"\n\nThe user wants this change: "${change}"\n\nWrite the new full description in English, keeping everything already in the image and applying the change. If the change asks for more intensity ("more", "very", "even more"), use much stronger words than the current description, with concrete details, and put that trait at the start. Do not put text or letters on the image. Answer only with the description, without quotes.`) }],
       options: { num_ctx: settings.ctx, num_predict: 300, temperature: 0.4 }
     })
   });
@@ -2467,6 +2789,129 @@ async function imageDownload(i, j) {
   downloadBlob(await (await fetch(g.src)).blob(), base + (g.kind === 'sticker' ? '.webp' : '.jpg'));
 }
 function gpuForChat() { return localApi('/api/gpu-for-chat', {}); }
+
+// ---------- prompt generator: a scene in your own words -> an English prompt for image generators ----------
+const PROMPT_WRITER = `You turn a scene described in the user's own words (usually Portuguese) into a prompt for AI image generators.
+Reply with ONLY the prompt, in English, in one paragraph, with no title, quotes, lists or explanation.
+Be faithful: describe only what the user said, with all of their details. Do not invent people, animals, objects, places, colors, clothes, actions, weather or story they did not mention.
+The only things you may add are a few words that fit what they said: the framing, the kind of light and the style. If they named a style (anime, cartoon, drawing, painting, 3D...), use only that one and never call it a photo; if they did not, make it a realistic photo.
+The prompt is only as long as the description needs: a short description gives a short prompt.
+Never refuse, never add warnings, never change what was asked. Never sexualize minors.`;
+let pgWriting = false;
+function openPrompter() {
+  $('#prompter').hidden = false;
+  document.body.classList.remove('sb-open');
+  $('#pg-input').focus();
+}
+function pgButtons() {
+  $('#pg-go').disabled = pgWriting;
+  $('#pg-go').textContent = tr(pgWriting ? 'Escrevendo…' : 'Gerar prompt');
+  for (const b of document.querySelectorAll('#pg-out .btn')) b.disabled = pgWriting;
+}
+function cleanPrompt(text) {
+  return parseThink(text).answer.trim().replace(/^(\*\*)?prompt(\*\*)?\s*:\s*/i, '').replace(/^["“]+|["”]+$/g, '').trim();
+}
+async function writePrompt() {
+  const desc = $('#pg-input').value.trim();
+  if (!desc || pgWriting) { if (!desc) $('#pg-input').focus(); return; }
+  const out = $('#pg-result');
+  $('#pg-out').hidden = false;
+  out.value = '';
+  pgWriting = true;
+  pgButtons();
+  try {
+    await gpuForChat();
+    const res = await ollamaFetch('/api/chat', {
+      model: MODELS[modelKey].id,
+      stream: true,
+      think: false,
+      messages: [{ role: 'system', content: PROMPT_WRITER }, { role: 'user', content: desc }],
+      options: { num_ctx: settings.ctx, num_predict: 400, temperature: 0.8 } // same context as the chat, so the model is not reloaded
+    });
+    if (!res.ok) throw new Error(`O Ollama respondeu com erro ${res.status}.`);
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '', text = '';
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (!line) continue;
+        let data;
+        try { data = JSON.parse(line); } catch { continue; }
+        if (data.error) throw new Error(data.error);
+        if (data.message?.content) { text += data.message.content; out.value = cleanPrompt(text); }
+      }
+    }
+  } catch (e) {
+    toast(errMsg(e));
+  } finally {
+    pgWriting = false;
+    pgButtons();
+  }
+}
+// ---------- tour: the first time it opens, one line about each part that this PC has ----------
+const LS_TOUR = 'ntchat_tour_seen';
+let tour = null; // { steps, k }
+function tourSteps() {
+  const shown = sel => {
+    const el = sel && document.querySelector(sel);
+    if (!el || el.closest('[hidden]')) return false;
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 && r.right > 0 && r.left < innerWidth;
+  };
+  return [
+    { title: L('Bem-vindo ao NTChat', 'Welcome to NTChat'), text: L('Tudo roda no seu PC: sem censura e sem mandar suas conversas pra internet.', 'Everything runs on your PC: uncensored, and your chats never leave it.') },
+    { sel: '#composer', title: L('Pergunte qualquer coisa', 'Ask anything'), text: L('Ele pesquisa na internet sozinho quando precisa e lembra do que vocês já conversaram.', 'It searches the web by itself when needed and remembers your past chats.') },
+    { sel: '#img-btn', title: L('Crie imagens', 'Create images'), text: L('Ligue "Imagem" e peça: "faz uma foto de um gato astronauta".', 'Turn on "Image" and ask: "make a photo of an astronaut cat".') },
+    { sel: '[data-action="attach"]', when: () => features.photo_edit, title: L('Edite suas fotos', 'Edit your photos'), text: L('Mande uma foto e peça: "deixa ele mais gordo", "me coloca nessa cena" ou "melhora essa foto".', 'Send a photo and ask: "make him fatter", "put me in this scene" or "improve this photo".') },
+    { sel: '#talk-btn', title: L('Converse por voz', 'Talk by voice'), text: L('Fale e ouça a resposta, sem digitar.', 'Talk and hear the answer, no typing.') },
+    { sel: '#sidebar [data-action="open-prompter"]', title: 'Prompts', text: L('Descreva uma cena com suas palavras e ele escreve o prompt em inglês.', 'Describe a scene in your own words and it writes the prompt in English.') },
+    { sel: '#sidebar [data-action="open-settings"]', title: L('Configurações', 'Settings'), text: L('Voz, personagens, memória, modelos de imagem e o código pra usar no celular.', 'Voice, characters, memory, image models and the code to use it on your phone.') }
+  ].filter(st => (!st.when || st.when()) && (!st.sel || shown(st.sel)));
+}
+function startTour() {
+  tour = { steps: tourSteps(), k: 0 };
+  $('#tour').hidden = false;
+  showTourStep();
+}
+function endTour() {
+  tour = null;
+  $('#tour').hidden = true;
+  try { localStorage.setItem(LS_TOUR, '1'); } catch {}
+  input.focus();
+}
+function nextTourStep() {
+  if (!tour) return;
+  tour.k++;
+  if (tour.k >= tour.steps.length) endTour(); else showTourStep();
+}
+function showTourStep() {
+  const st = tour.steps[tour.k];
+  $('#tour-title').textContent = st.title;
+  $('#tour-text').textContent = st.text;
+  $('#tour-step').textContent = `${tour.k + 1}/${tour.steps.length}`;
+  $('#tour-next').textContent = tr(tour.k === tour.steps.length - 1 ? 'Começar' : 'Próximo');
+  const hole = $('#tour .tour-hole'), card = $('#tour .tour-card');
+  const el = st.sel && document.querySelector(st.sel);
+  const cw = card.offsetWidth, ch = card.offsetHeight;
+  if (el) {
+    const r = el.getBoundingClientRect(), pad = 6;
+    Object.assign(hole.style, { left: `${r.left - pad}px`, top: `${r.top - pad}px`, width: `${r.width + pad * 2}px`, height: `${r.height + pad * 2}px` });
+    let top = r.bottom + 14;
+    if (top + ch > innerHeight - 12) top = r.top - ch - 14;
+    const left = Math.max(12, Math.min(r.left + r.width / 2 - cw / 2, innerWidth - cw - 12));
+    Object.assign(card.style, { left: `${left}px`, top: `${Math.max(12, Math.min(top, innerHeight - ch - 12))}px` });
+  } else {
+    Object.assign(hole.style, { left: `${innerWidth / 2}px`, top: `${innerHeight / 2}px`, width: '0px', height: '0px' });
+    Object.assign(card.style, { left: `${(innerWidth - cw) / 2}px`, top: `${(innerHeight - ch) / 2}px` });
+  }
+}
+window.addEventListener('resize', () => { if (tour) showTourStep(); });
 
 // ---------- gallery ----------
 function openGallery() {
@@ -2570,19 +3015,76 @@ function markSpeaking() {
     b.innerHTML = I(on ? 'stopsq' : 'speaker');
   });
 }
+// The local voice (Kokoro, installed with NTChat): much better than the browser's. Santa is the default.
+const KOKORO_VOICES = {
+  pt: [['pm_santa', 'Santa (masculina)'], ['pf_dora', 'Dora (feminina)'], ['pm_alex', 'Alex (masculina)']],
+  en: [['af_heart', 'Heart (female)'], ['af_bella', 'Bella (female)'], ['am_michael', 'Michael (male)'], ['am_fenrir', 'Fenrir (male)']]
+};
+function kokoroVoice() {
+  const list = KOKORO_VOICES[LANG === 'en' ? 'en' : 'pt'];
+  const v = settings.voice.startsWith('kokoro:') ? settings.voice.slice(7) : '';
+  return list.some(([k]) => k === v) ? v : list[0][0];
+}
+// Pieces of a sentence or two; the first one short, so the voice starts quickly
+function ttsChunks(text) {
+  const out = [];
+  let cur = '';
+  for (const part of text.match(/[^.!?…\n]+[.!?…]*\s*|\n+/g) || [text]) {
+    if (cur && (cur + part).length > 280) { out.push(cur); cur = ''; }
+    cur += part;
+    if (!out.length && cur.length > 70) { out.push(cur); cur = ''; }
+  }
+  if (cur) out.push(cur);
+  return out.flatMap(c => (c.length > 700 ? c.match(/[\s\S]{1,700}(\s|$)/g) : [c])).map(c => c.trim()).filter(Boolean);
+}
+let speakJob = null, speakAudio = null, speakEnd = null;
+// Plays the text with the local voice, asking for the next piece while one plays. True if it got to the end.
+async function speakWithKokoro(text) {
+  const job = {};
+  speakJob = job;
+  const chunks = ttsChunks(text);
+  if (!chunks.length) return true;
+  const get = c => localApi('/api/tts', { texto: c, voz: kokoroVoice() });
+  let next = get(chunks[0]);
+  for (let k = 0; k < chunks.length; k++) {
+    const r = await next;
+    if (speakJob !== job) return false;
+    if (k + 1 < chunks.length) next = get(chunks[k + 1]);
+    if (r.error) { toast(`Não deu pra falar: ${r.error}`); break; }
+    await new Promise(res => {
+      const a = new Audio(r.audio);
+      speakAudio = a;
+      speakEnd = res;
+      a.onended = a.onerror = () => res();
+      a.play().catch(() => res());
+    });
+    if (speakJob !== job) return false;
+  }
+  if (speakJob === job) speakJob = null;
+  return true;
+}
 function stopSpeaking() {
   if ('speechSynthesis' in window) speechSynthesis.cancel();
+  speakJob = null;
+  if (speakAudio) { speakAudio.pause(); speakAudio = null; }
+  if (speakEnd) { const end = speakEnd; speakEnd = null; end(); }
   speaking = null;
   markSpeaking();
 }
 function speak(i) {
-  if (!('speechSynthesis' in window)) { toast('Este navegador não tem leitura em voz alta.'); return; }
   const again = speaking === i;
   stopSpeaking();
   if (again) return;
   const m = current()?.messages[i];
   const text = m ? speechText(splitMsg(m).answer) : '';
   if (!text) return;
+  if (features.tts) {
+    speaking = i;
+    markSpeaking();
+    speakWithKokoro(text).then(done => { if (done && speaking === i) { speaking = null; markSpeaking(); } });
+    return;
+  }
+  if (!('speechSynthesis' in window)) { toast('Este navegador não tem leitura em voz alta.'); return; }
   const voice = pickVoice();
   if (!voice) toast('Não achei voz em português no Windows; vou usar a voz padrão.');
   const chunks = text.match(/[^.!?]{1,220}[.!?]*|.{1,220}/g) || [text];
@@ -2598,6 +3100,11 @@ function speak(i) {
 }
 function renderVoices() {
   const sel = $('#set-voice');
+  if (features.tts) {
+    const v = kokoroVoice();
+    sel.innerHTML = KOKORO_VOICES[LANG === 'en' ? 'en' : 'pt'].map(([k, name]) => `<option value="kokoro:${k}"${k === v ? ' selected' : ''}>${esc(name)}</option>`).join('');
+    return;
+  }
   const voices = ptVoices();
   const chosen = pickVoice();
   sel.innerHTML = voices.length
@@ -2930,6 +3437,11 @@ function stepHTML(s) {
     label = s.running ? `Lendo ${hostOf(s.url)}…` : s.error ? `Não deu pra abrir ${hostOf(s.url)}: ${s.error}` : `Leu ${s.title || hostOf(s.url)}`;
   } else if (s.type === 'calc') {
     label = s.running ? `Calculando ${s.expr}…` : s.error ? `Não deu pra calcular ${s.expr}: ${s.error}` : `Calculou ${s.expr} = ${s.result}`;
+  } else if (s.type === 'photo') {
+    label = s.running ? 'Editando a foto' : s.error ? `Não deu pra editar a foto: ${s.error}` : `Editou a foto em ${fmtSecs(s.seconds || 0)}`;
+  } else if (s.type === 'recall') {
+    const n = s.chats?.length || 0;
+    label = s.running ? 'Procurando nas conversas' : n ? `Lembrou de ${n} ${n === 1 ? 'conversa' : 'conversas'}` : 'Não achou nas conversas antigas';
   } else if (s.type === 'image') {
     const many = (s.count || s.images?.length || 1) > 1;
     label = s.running ? (settings.imageCount > 1 ? 'Gerando 4 imagens' : 'Gerando imagem')
@@ -2945,11 +3457,13 @@ function stepHTML(s) {
       list = `<ul>${s.results.map(r => `<li><a href="${esc(safeHref(r.url))}" target="_blank" rel="noopener noreferrer">${esc(r.title || r.url)}</a><span class="host">${esc(hostOf(r.url))}</span></li>`).join('')}</ul>`;
     } else if (s.type === 'fetch') {
       list = `<ul><li><a href="${esc(safeHref(s.url))}" target="_blank" rel="noopener noreferrer">${esc(s.url)}</a></li></ul>`;
-    } else if (s.type === 'image' && s.prompt) {
+    } else if (s.type === 'recall' && s.chats?.length) {
+      list = `<ul>${s.chats.map(c => `<li><a href="#" data-action="open-chat" data-id="${esc(c.id)}">${esc(c.title || L('Conversa sem título', 'Untitled chat'))}</a></li>`).join('')}</ul>`;
+    } else if ((s.type === 'image' || s.type === 'photo') && s.prompt) {
       list = `<ul><li class="prompt">${esc(s.prompt)}</li></ul>`;
     }
   }
-  const icon = s.running ? '<span class="spinner"></span>' : I({ fetch: 'page', image: 'image', calc: 'calc' }[s.type] || 'globe');
+  const icon = s.running ? '<span class="spinner"></span>' : I({ fetch: 'page', image: 'image', photo: 'image', calc: 'calc', recall: 'search' }[s.type] || 'globe');
   return `<details class="step${s.error ? ' err' : ''}"><summary>${icon}<span>${esc(label)}</span></summary>${list}</details>`;
 }
 // Many web steps (deep research) fold into one line that opens to show them.
@@ -3014,7 +3528,7 @@ function summaryHTML(s) {
 function renderThread(scroll = true) {
   const chat = current();
   updateTitle();
-  input.placeholder = chat ? 'Responder…' : 'Como posso ajudar?';
+  updatePlaceholder();
   if (!chat || !chat.messages.length) {
     thread.classList.add('is-empty');
     thread.innerHTML = welcomeHTML();
@@ -3025,6 +3539,7 @@ function renderThread(scroll = true) {
   const summary = checkSummary(chat);
   thread.innerHTML = chat.messages.map((m, i) => (summary?.upTo === i ? summaryHTML(summary) : '')
     + (m.role === 'user' ? userHTML(m, i) : aiHTML(m, i, i === last))).join('');
+  if (liveGen?.chatId === chat.id) thread.appendChild(liveGen.el);
   if (scroll) toBottom(true);
 }
 function toBottom(force) {
@@ -3086,7 +3601,7 @@ function send() {
   autosize();
   sendMessage(text, { images, files });
 }
-function sendMessage(text, { images = [], files = [], extra = '' } = {}) {
+function sendMessage(text, { images = [], files = [], extra = '', voice = false } = {}) {
   let chat = current();
   if (!chat) {
     const title = (text || files[0]?.name || 'Imagem anexada').replace(/\s+/g, ' ').slice(0, 60);
@@ -3104,7 +3619,7 @@ function sendMessage(text, { images = [], files = [], extra = '' } = {}) {
   saveChat(chat);
   renderList();
   renderThread();
-  generate(chat);
+  return generate(chat, { voice });
 }
 function regenerate() {
   const chat = current();
@@ -3145,6 +3660,7 @@ function paint(el, s) {
     if (det.open) body.scrollTop = body.scrollHeight;
   }
   el.querySelector('.md').innerHTML = md(s.answer);
+  if (!el.isConnected) return;
   liveArtifact(s.answer);
   toBottom(false);
 }
@@ -3153,7 +3669,7 @@ function paintSteps(el, steps) {
   const open = box.querySelector(':scope > .step.group')?.open;
   box.innerHTML = stepsHTML(steps);
   if (open) box.querySelector(':scope > .step.group')?.setAttribute('open', '');
-  toBottom(false);
+  if (el.isConnected) toBottom(false);
 }
 function errMsg(e) {
   if (e instanceof TypeError) return 'O Ollama não respondeu. Veja se ele está aberto (ícone perto do relógio do Windows).';
@@ -3174,6 +3690,120 @@ function wantsImageText(chat) {
   const u = [...(chat?.messages || [])].reverse().find(m => m.role === 'user');
   const text = String(u?.content || '');
   return TEXT_WORDS.test(text) && !NO_TEXT.test(text);
+}
+
+// ---------- old chats: finds what was said in the other saved conversations (all local, on the PC and the phone) ----------
+const RECALL_TOOL = {
+  type: 'function',
+  function: {
+    name: 'lembrar_conversas',
+    description: L('Procura nas conversas antigas do usuário (as outras conversas salvas no NTChat) e devolve os trechos sobre o assunto. Use quando ele falar de algo que vocês conversaram antes ou de algo que ele te contou em outra conversa.',
+      "Searches the user's old chats (the other chats saved in NTChat) and returns the parts about the subject. Use it when they mention something you talked about before or something they told you in another chat."),
+    parameters: { type: 'object', properties: { assunto: { type: 'string', description: L('2 a 5 palavras do assunto. Ex.: "viagem Japão orçamento"', '2 to 5 words about the subject. E.g. "Japan trip budget"') } }, required: ['assunto'] }
+  }
+};
+// "lembra do que falamos sobre...", "aquilo que te contei", "remember what we talked about..."
+const RECALL_REQUEST = /\blembr(a|as|ar|o|ou|ei|ando)\b|\brecorda|\b(falamos|conversamos|combinamos|discutimos|t[ií]nhamos)\b|\bte (contei|falei|disse|mostrei|mandei|expliquei|pedi|passei)\b|\b(outra|[uú]ltima|aquela|naquela|nossa) conversa\b|\b(remember|recall)\b|\bwe (talked|discussed|spoke|chatted)\b|\bI (told|showed|asked) you\b|\b(last|other|previous) (chat|conversation)\b|\b(qual|quais)\s+(é|e|era|s[aã]o|eram)\s+(o|a|os|as)\s+(\S+\s+){0,3}?(d[oa]s?\s+)?(meu|minha|meus|minhas)\b|\bvoc[eê] (sabe|lembra)\b[^?]{0,60}\b(meu|minha|meus|minhas)\b|\bmesmo\s*\?\s*$|\bwhat(?:'s| is| was| were) my\b|\bdo you know my\b/i;
+const RECALL_STOP = new Set(('a o os as um uma uns umas de do da dos das em no na nos nas num numa por pra pro pras pros para com sem que se e ou mas mais menos ' +
+  'muito muita muitos muitas como quando onde qual quais quem eu tu ele ela eles elas voce voces vc vcs me te lhe mim meu minha meus minhas seu sua seus suas ' +
+  'teu tua nosso nossa isso isto esse essa esses essas este esta estes estas aquilo aquele aquela aqueles aquelas ali aqui ja nao sim tem ter tinha tive foi era ' +
+  'ser sou estar estava tava vai ia dar faz fazer fiz fez fala falar falou falamos falei falando disse dizer diz lembra lembras lembrar lembro lembrou lembrando ' +
+  'lembrei recorda recordar conversa conversas conversamos conversando sobre assunto outro outra outros outras dia vez coisa coisas tudo nada algo alguma algum ' +
+  'agora antes depois entao tambem ainda pode poderia quero queria sabe saber hein contei contou mostrei mandei pedi expliquei passei passou combinamos ' +
+  'discutimos tinhamos the an of to in on at for with about what which that this these those we you me my your it its is was were be been did do does done ' +
+  'remember recall talked talk discussed discuss spoke said told chat chats conversation conversations last other previous time again thing things something').split(' '));
+function normText(s) { return String(s || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase(); }
+// Words that say what the subject is, cut a little so plurals still match (viagens -> viage... matches viagem)
+function recallTerms(query) {
+  const terms = new Set();
+  for (const w of normText(query).split(/[^\p{L}\p{N}]+/u)) {
+    if ((w.length < 3 && !/^\d+$/.test(w)) || RECALL_STOP.has(w)) continue;
+    terms.add(w.length > 5 ? w.slice(0, -2) : w);
+  }
+  return [...terms].slice(0, 12);
+}
+function recallText(m) { return String(m?.content || '').replace(/<think>[\s\S]*?(<\/think>|$)/g, '').trim(); }
+// A piece of the message around the first word that matched
+function recallSnippet(text, terms, size) {
+  if (text.length <= size) return text;
+  const norm = normText(text);
+  let at = -1;
+  for (const t of terms) {
+    const i = norm.search(new RegExp(`(^|[^\\p{L}\\p{N}])${t}`, 'u'));
+    if (i >= 0 && (at < 0 || i < at)) at = i;
+  }
+  const start = Math.max(0, Math.min(at - Math.floor(size / 4), text.length - size));
+  return (start > 0 ? '…' : '') + text.slice(start, start + size).trim() + (start + size < text.length ? '…' : '');
+}
+// The chats (other than this one) that best match the subject, with the messages that talk about it
+function searchChats(list, query, skipId, max = 3) {
+  const terms = recallTerms(query);
+  if (!terms.length) return [];
+  const docs = [];
+  for (const c of list || []) {
+    if (!c || c.id === skipId || !Array.isArray(c.messages)) continue;
+    c.messages.forEach((m, i) => {
+      if (m.role !== 'user' && m.role !== 'assistant') return;
+      const text = recallText(m);
+      if (!text) return;
+      const words = normText(text).split(/[^\p{L}\p{N}]+/u);
+      const hits = terms.filter(t => words.some(w => w.startsWith(t)));
+      if (hits.length) docs.push({ c, i, text, hits });
+    });
+  }
+  if (!docs.length) return [];
+  const df = Object.fromEntries(terms.map(t => [t, docs.filter(d => d.hits.includes(t)).length]));
+  const weight = t => Math.log(1 + docs.length / df[t]);
+  const byChat = new Map();
+  for (const d of docs) {
+    d.score = d.hits.reduce((a, t) => a + weight(t), 0);
+    if (!byChat.has(d.c.id)) byChat.set(d.c.id, []);
+    byChat.get(d.c.id).push(d);
+  }
+  const need = Math.min(2, terms.length);
+  const found = [];
+  for (const ds of byChat.values()) {
+    const c = ds[0].c;
+    const title = normText(c.title);
+    const inTitle = terms.filter(t => title.split(/[^\p{L}\p{N}]+/u).some(w => w.startsWith(t)));
+    const matched = new Set([...inTitle, ...ds.flatMap(d => d.hits)]);
+    if (matched.size < need) continue;
+    ds.sort((a, b) => b.score - a.score);
+    const rest = ds.slice(1).reduce((a, d) => a + d.score, 0);
+    const score = ds[0].score + Math.min(rest, ds[0].score) * 0.25 + inTitle.reduce((a, t) => a + weight(t), 0) * 1.5;
+    // the best 2 messages, each with its question or answer next to it
+    const idx = new Set();
+    for (const d of ds.slice(0, 2)) {
+      idx.add(d.i);
+      const other = c.messages[d.i].role === 'user' ? d.i + 1 : d.i - 1;
+      if (c.messages[other] && recallText(c.messages[other])) idx.add(other);
+    }
+    const parts = [...idx].sort((a, b) => a - b).map(i => ({
+      role: c.messages[i].role,
+      text: recallSnippet(recallText(c.messages[i]), terms, c.messages[i].role === 'user' ? 500 : 900)
+    }));
+    found.push({ id: c.id, title: c.title || '', at: c.updatedAt || Number(c.id) || 0, score, parts });
+  }
+  return found.sort((a, b) => b.score - a.score).slice(0, max);
+}
+function recallReport(found) {
+  return found.map(f => {
+    const when = f.at ? new Date(f.at).toLocaleDateString(LOCALE, { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+    return `${L('Conversa', 'Chat')} "${f.title}"${when ? ` (${when})` : ''}:\n` +
+      f.parts.map(p => `${p.role === 'user' ? L('Usuário', 'User') : L('Você', 'You')}: ${p.text}`).join('\n');
+  }).join('\n\n---\n\n');
+}
+// When the message asks to recall something, look it up before answering (a small model often forgets to call the tool)
+function autoRecall(chat) {
+  const u = chat.messages.findLast(m => m.role === 'user');
+  if (!RECALL_REQUEST.test(u?.content || '')) return null;
+  const found = searchChats(chats, u.content, chat.id);
+  if (!found.length) return null;
+  return {
+    step: { type: 'recall', chats: found.map(f => ({ id: f.id, title: f.title })) },
+    text: `${L('Trechos de conversas antigas que podem ser o que o usuário quer lembrar. Use só se forem sobre o assunto e diga de qual conversa veio; se não forem, procure de novo com lembrar_conversas ou diga que não achou',
+      'Parts of old chats that may be what the user wants to recall. Use them only if they are about the subject and say which chat they came from; if not, search again with lembrar_conversas or say you found nothing')}:\n\n${recallReport(found)}`
+  };
 }
 
 async function runTool(call, step, signal, opts = {}) {
@@ -3206,6 +3836,25 @@ async function runTool(call, step, signal, opts = {}) {
       step.error = e.message;
       return `${L('Não deu pra calcular', 'Could not calculate')}: ${e.message}. ${L('Reescreva a conta só com números, + - * / ^ ( ) e funções como sqrt, round e log.', 'Rewrite it with only numbers, + - * / ^ ( ) and functions like sqrt, round and log.')}`;
     }
+  }
+  if (name === 'editar_foto') {
+    step.type = 'photo';
+    step.prompt = String(args.pedido || args.descricao || args.prompt || '').trim();
+    const fotos = opts.photos?.(args.referencia === true || args.referencia === 'true', args.original === true || args.original === 'true', step.prompt) || {};
+    if (!fotos.main) { step.error = L('não tem foto nesta conversa', 'there is no photo in this chat'); return L('Não há foto nesta conversa pra editar. Peça pro usuário mandar a foto.', 'There is no photo in this chat to edit. Ask the user to send the photo.'); }
+    const r = await localApi('/api/edit-photo', { imagem: fotos.main.data, arquivo: fotos.main.file, imagem2: fotos.ref?.data, pedido: step.prompt }, signal);
+    if (r.error) { step.error = r.error; return `${L('Não deu pra editar a foto', 'Could not edit the photo')}: ${r.error}`; }
+    step.seconds = r.seconds;
+    step.images = [{ src: await toJpeg(r.image), prompt: step.prompt, file: r.file, seconds: r.seconds, modelo: 'klein', fonte: r.source, fonte2: r.source2 || undefined }];
+    return L('A foto editada já está aparecendo para o usuário.', 'The edited photo is already showing to the user.');
+  }
+  if (name === 'lembrar_conversas') {
+    step.type = 'recall';
+    step.query = String(args.assunto || args.consulta || args.busca || args.query || '').trim().slice(0, 200);
+    const found = searchChats(chats, step.query, opts.chatId);
+    step.chats = found.map(f => ({ id: f.id, title: f.title }));
+    if (!found.length) return L('Não achei nada sobre isso nas conversas antigas. Diga isso ao usuário, sem inventar.', 'Found nothing about it in the old chats. Tell the user so, without making anything up.');
+    return recallReport(found);
   }
   if (name === 'gerar_imagem') {
     step.type = 'image';
@@ -3521,7 +4170,7 @@ async function autoMemory(chat) {
   } catch {}
 }
 
-let features = { images: true, voice: true, stickers: true };
+let features = { images: true, voice: true, stickers: true, photo_edit: false };
 let imageModels = []; // [{ key, name }] installed on the PC, best first
 const IMAGE_MODEL_LABELS = {
   chroma: { short: 'Chroma', name: 'Chroma1-HD', note: L('sem censura', 'uncensored') },
@@ -3545,15 +4194,18 @@ const healthReady = localApi('/api/health').then(h => {
 const IMAGE_MODEL_INFO = {
   chroma: L('Sem censura e o mais detalhado. Uns 2 minutos por imagem.', 'Uncensored and the most detailed. About 2 minutes per image.'),
   zimage: L('Rápido (uns 10 segundos) e ótimo em foto realista.', 'Fast (about 10 seconds) and great at realistic photos.'),
-  sd15: L('O modelo de 2022: instantâneo, com aquele visual torto de IA antiga.', 'The 2022 model: instant, with that wonky old-AI look.')
+  sd15: L('O modelo de 2022: instantâneo, com aquele visual torto de IA antiga.', 'The 2022 model: instant, with that wonky old-AI look.'),
+  klein: L('Edita as fotos que você manda: muda roupa, gesto, fundo, estilo. Com Imagem ligado, mande a foto e peça a mudança.', 'Edits the photos you send: clothes, gesture, background, style. With Image on, send the photo and ask for the change.')
 };
 let modelsTimer = null;
 let modelsShown = null;
 function applyImageModels(st) {
   if (!st || st.error || !Array.isArray(st.models)) return;
   modelsShown = st;
-  imageModels = st.models.filter(m => m.installed).map(m => ({ key: m.key, name: m.name }));
-  features.images = imageModels.length > 0;
+  // klein only edits photos: it never shows up among the models that create images
+  imageModels = st.models.filter(m => m.installed && m.key !== 'klein').map(m => ({ key: m.key, name: m.name }));
+  features.photo_edit = st.models.some(m => m.installed && m.key === 'klein');
+  features.images = imageModels.length > 0 || features.photo_edit;
   if (imageModels.length && !imageModels.some(m => m.key === settings.imageModel)) settings.imageModel = imageModels[0].key;
   applyFeatures();
 }
@@ -3608,6 +4260,7 @@ function applyFeatures() {
   $('#img-btn').hidden = !features.images;
   if (!features.images) settings.image = false;
   $('#mic-btn').hidden = !features.voice || !navigator.mediaDevices?.getUserMedia;
+  $('#talk-btn').hidden = !features.voice || !features.tts || !navigator.mediaDevices?.getUserMedia || !window.MediaRecorder;
   renderModelBtn();
   renderThread();
 }
@@ -3620,7 +4273,9 @@ async function generate(chat, opts = {}) {
   const web = settings.web && !cont && !deep;
   const imgOn = settings.image && !cont;
   const autoWeb = !web && !deep && !cont && settings.autoWeb;
-  const toolList = cont ? [] : [...(web || autoWeb ? TOOLS : []), ...(imgOn ? [IMAGE_TOOL] : []), CALC_TOOL];
+  const photoOn = imgOn && features.photo_edit && !!lastPhoto(chat);
+  const recallOn = !cont && chats.some(c => c.id !== chat.id && c.messages?.length);
+  const toolList = cont ? [] : [...(web || autoWeb ? TOOLS : []), ...(imgOn && imageModels.length ? [IMAGE_TOOL] : []), ...(photoOn ? [PHOTO_TOOL] : []), CALC_TOOL, ...(recallOn ? [RECALL_TOOL] : [])];
   const genImages = [];
   const think = !cont && shouldThink(chat, imgOn);
   art.dismissed = false;
@@ -3634,6 +4289,7 @@ async function generate(chat, opts = {}) {
     <div class="md"></div>
     <div class="status"><span class="spinner"></span><span class="status-text"></span></div>`;
   thread.appendChild(el);
+  liveGen = { chatId: chat.id, el };
   const statusText = el.querySelector('.status-text');
   let waitLabel = cont ? 'Continuando' : isLoaded(model.id) ? 'Pensando' : `Carregando ${model.name} na memória`;
   const t0 = performance.now();
@@ -3647,7 +4303,7 @@ async function generate(chat, opts = {}) {
   abortCtl = new AbortController();
   const signal = abortCtl.signal;
 
-  const sys = systemPrompt(web, imgOn, chat, { autoWeb, calc: !cont });
+  const sys = systemPrompt(web, imgOn, chat, { autoWeb, calc: !cont, photo: photoOn, recall: recallOn, voice: !!opts.voice });
   const setLabel = label => {
     waitLabel = label;
     waitStart = performance.now();
@@ -3665,6 +4321,13 @@ async function generate(chat, opts = {}) {
     convo = [{ role: 'system', content: summary ? `${sys}\n\n${L('Resumo do começo desta conversa (as mensagens mais antigas foram resumidas pra caber na memória)', 'Summary of the start of this chat (the oldest messages were summarized to fit in memory)')}:\n${summary.text}` : sys }];
     for (const m of chat.messages.slice(summary?.upTo || 0)) convo.push(...toApi(m, vision));
     if (cont) convo.push({ role: 'user', content: CONTINUE_PROMPT });
+    const recall = recallOn ? autoRecall(chat) : null;
+    if (recall) {
+      steps.push(recall.step);
+      paintSteps(el, steps);
+      const k = convo.map(m => m.role).lastIndexOf('user');
+      if (k > 0) convo[k] = { ...convo[k], content: `${convo[k].content}\n\n${recall.text}` };
+    }
     if (deep) {
       stepTicker = setInterval(() => paintSteps(el, steps), 1000);
       const found = await deepResearch(chat, steps, el, signal, setLabel);
@@ -3746,7 +4409,7 @@ async function generate(chat, opts = {}) {
       for (const call of calls) {
         const name = call.function?.name;
         const a = parseArgs(call.function?.arguments);
-        const step = { type: { abrir_pagina: 'fetch', gerar_imagem: 'image', calcular: 'calc' }[name] || 'search', running: true, query: a.consulta || '', url: a.url || '', prompt: a.descricao || '', expr: a.expressao || '' };
+        const step = { type: { abrir_pagina: 'fetch', gerar_imagem: 'image', editar_foto: 'photo', calcular: 'calc', lembrar_conversas: 'recall' }[name] || 'search', running: true, query: a.consulta || a.assunto || '', url: a.url || '', prompt: a.descricao || a.pedido || '', expr: a.expressao || '' };
         steps.push(step);
         paintSteps(el, steps);
         step.startedAt = performance.now();
@@ -3754,7 +4417,7 @@ async function generate(chat, opts = {}) {
         const stepTimer = setInterval(() => paintSteps(el, steps), 1000);
         let result;
         try {
-          result = await runTool(call, step, signal, { wantsText: wantsImageText(chat) });
+          result = await runTool(call, step, signal, { wantsText: wantsImageText(chat), photos: (ref, orig, pedido) => photosFor(chat, ref, orig, pedido), chatId: chat.id });
         } finally {
           clearInterval(stepTimer);
         }
@@ -3763,11 +4426,11 @@ async function generate(chat, opts = {}) {
         for (const image of step.images || []) {
           genImages.push(image);
           el.querySelector('.gen-live').insertAdjacentHTML('beforeend', genFigure(image));
-          toBottom(false);
+          if (el.isConnected) toBottom(false);
         }
         convo.push({ role: 'tool', tool_name: name, content: result });
       }
-      if (genImages.length && calls.every(c => c.function?.name === 'gerar_imagem')) break;
+      if (genImages.length && calls.every(c => ['gerar_imagem', 'editar_foto'].includes(c.function?.name))) break;
       waitLabel = 'Lendo os resultados e pensando';
       waitStart = performance.now();
       tick();
@@ -3786,8 +4449,9 @@ async function generate(chat, opts = {}) {
 
   const p = parseThink(answer);
   const thinking = thinkField || p.thinking;
-  const cleanSteps = steps.map(s => ({ type: s.type, query: s.query || undefined, url: s.url || undefined, prompt: s.prompt || undefined, seconds: s.seconds, count: s.images?.length || undefined, title: s.title, results: s.results, error: s.error, name: s.name, expr: s.expr || undefined, result: s.result }));
-  finishArtifact(p.answer);
+  const cleanSteps = steps.map(s => ({ type: s.type, query: s.query || undefined, url: s.url || undefined, prompt: s.prompt || undefined, seconds: s.seconds, count: s.images?.length || undefined, title: s.title, results: s.results, error: s.error, name: s.name, expr: s.expr || undefined, result: s.result, chats: s.chats }));
+  liveGen = null;
+  if (chat.id === currentId) finishArtifact(p.answer); else art.live = false;
   if (cont && (p.answer || stopped)) {
     const last = chat.messages[chat.messages.length - 1];
     last.content = (last.content || '') + p.answer;
@@ -3999,7 +4663,7 @@ document.addEventListener('click', e => {
   switch (t.dataset.action) {
     case 'toggle-sidebar': toggleSidebar(); break;
     case 'new-chat': newChat(); break;
-    case 'open-chat': selectChat(t.dataset.id); break;
+    case 'open-chat': e.preventDefault(); selectChat(t.dataset.id); break;
     case 'delete-chat': deleteChat(t.dataset.id); break;
     case 'pin-chat': pinChat(t.dataset.id); break;
     case 'rename-chat': startRename(t.dataset.id); break;
@@ -4039,6 +4703,12 @@ document.addEventListener('click', e => {
     case 'open-gallery': openGallery(); break;
     case 'gal-open': $('#gallery').hidden = true; $('#lightbox').hidden = true; selectChat(t.dataset.id); break;
     case 'open-projects': openProjects(); break;
+    case 'open-prompter': openPrompter(); break;
+    case 'tour-next': nextTourStep(); break;
+    case 'tour-skip': endTour(); break;
+    case 'tour-start': closeSettings(); startTour(); break;
+    case 'pg-go': writePrompt(); break;
+    case 'pg-copy': copyText($('#pg-result').value); break;
     case 'project-new': editProject(null); break;
     case 'project-edit': editProject(t.dataset.id); break;
     case 'project-open': $('#projects').hidden = true; setActiveProject(t.dataset.id); break;
@@ -4140,6 +4810,9 @@ document.addEventListener('click', e => {
       break;
     }
     case 'mic': warmUp(); toggleMic(); break;
+    case 'talk': warmUp(); startTalk(); break;
+    case 'talk-stop': stopTalk(); break;
+    case 'talk-tap': if (talk?.state === 'falando') stopSpeaking(); break;
     case 'free-gpu':
       t.disabled = true;
       localApi('/api/free-gpu', {}).then(r => {
@@ -4188,7 +4861,11 @@ $('#mem-add').addEventListener('submit', e => {
   $('#mem-input').value = '';
   renderMemory();
 });
-$('#set-voice').addEventListener('change', e => { settings.voice = e.target.value; saveSettings(); });
+$('#set-voice').addEventListener('change', e => {
+  settings.voice = e.target.value;
+  saveSettings();
+  if (features.tts) { stopSpeaking(); speakWithKokoro(L('Oi! Essa é a minha voz.', 'Hi! This is my voice.')); }
+});
 $('#set-persona').addEventListener('change', e => { settings.persona = e.target.value; saveSettings(); renderModelBtn(); });
 $('#persona-form').addEventListener('submit', e => {
   e.preventDefault();
@@ -4261,10 +4938,13 @@ thread.addEventListener('keydown', e => {
   else if (e.key === 'Escape') { e.stopPropagation(); cancelEdit(); }
 });
 searchEl.addEventListener('input', renderList);
+$('#pg-input').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); writePrompt(); } });
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
+  if (tour) { endTour(); return; }
   if (!$('#img-opts').hidden) { closeImgOpts(); return; }
-  const openModal = ['project-edit', 'projects', 'gallery'].map(id => $(`#${id}`)).find(m => !m.hidden);
+  if (talk) { stopTalk(); return; }
+  const openModal = ['project-edit', 'projects', 'gallery', 'prompter'].map(id => $(`#${id}`)).find(m => !m.hidden);
   if (!$('#lightbox').hidden) $('#lightbox').hidden = true;
   else if (openModal) { openModal.hidden = true; if (openModal.id === 'project-edit') editingProject = null; }
   else if (!$('#settings').hidden) closeSettings();
@@ -4304,6 +4984,12 @@ renderProjBanner();
 updateSend();
 input.focus();
 load().then(() => { renderList(); renderThread(); });
+// The first time NTChat opens (after the installer), show the tour once the page knows what this PC has
+Promise.all([healthReady, new Promise(r => setTimeout(r, 600))]).then(() => {
+  let seen = true;
+  try { seen = !!localStorage.getItem(LS_TOUR); } catch {}
+  if (!seen && !tour && IS_PC && !mobile.matches) startTour(); // the tour is for the PC only
+});
 setInterval(pullChanges, 4000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { sayOnScreen(); pullChanges(); poll(); } });
 if (!IS_PC) document.body.classList.add('remote');
