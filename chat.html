@@ -7,7 +7,8 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icone-192.png">
 <title>NTChat</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23c96442'/%3E%3Cpath d='M17 18h30a5 5 0 0 1 5 5v15a5 5 0 0 1-5 5H31l-10 8v-8h-4a5 5 0 0 1-5-5V23a5 5 0 0 1 5-5z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="icon" href="chat.ico" sizes="16x16 20x20 24x24 32x32 40x40 48x48 64x64 72x72 96x96 128x128 256x256">
+<link rel="icon" type="image/png" sizes="192x192" href="icone-192.png">
 <script src="lib/marked.min.js"></script>
 <script src="lib/purify.min.js"></script>
 <script src="lib/highlight.min.js"></script>
@@ -3518,7 +3519,8 @@ function aiHTML(m, i, isLast) {
 function updateTitle() {
   const chat = current();
   $('#chat-title').textContent = chat ? chat.title : tr('Novo chat');
-  document.title = chat ? `${chat.title} · NTChat` : 'NTChat';
+  // On the PC the window title stays put: every change makes the browser redo the taskbar icon from the 16 px favicon
+  document.title = chat && !IS_PC ? `${chat.title} · NTChat` : 'NTChat';
   $('#export-wrap').hidden = !chat?.messages.length;
   $('#export-menu').hidden = true;
 }

@@ -2161,6 +2161,58 @@ class ChatHandler(QuietHandler):
             self.send_json({"error": "não encontrado"}, 404)
 
 
+# ---------- a sharp taskbar icon for the NTChat window (Windows) ----------
+def window_icon_keeper():
+    """Brave, Chrome and Edge make an app window's taskbar icon from the page's 16 px favicon, so it looks blurry, and
+    they make it again after loading. This puts chat.ico (it has every size) on the NTChat window, at the size for the
+    screen's scale, and puts it back whenever the browser swaps it."""
+    if os.name != "nt" or not os.path.isfile(os.path.join(ROOT, "chat.ico")):
+        return
+    import ctypes
+    import ctypes.wintypes as wt
+    user32 = ctypes.windll.user32
+    user32.SendMessageW.restype = ctypes.c_void_p
+    user32.SendMessageW.argtypes = [wt.HWND, ctypes.c_uint, ctypes.c_void_p, ctypes.c_void_p]
+    user32.LoadImageW.restype = ctypes.c_void_p
+    user32.LoadImageW.argtypes = [wt.HINSTANCE, wt.LPCWSTR, ctypes.c_uint, ctypes.c_int, ctypes.c_int, ctypes.c_uint]
+    dpi_of = getattr(user32, "GetDpiForWindow", None)
+    ico = os.path.join(ROOT, "chat.ico")
+    icons = {}
+
+    def icon(size):
+        if size not in icons:
+            icons[size] = user32.LoadImageW(None, ico, 1, size, size, 0x10)  # IMAGE_ICON, LR_LOADFROMFILE
+        return icons[size]
+
+    def windows():
+        found = []
+
+        @ctypes.WINFUNCTYPE(wt.BOOL, wt.HWND, wt.LPARAM)
+        def each(h, _):
+            name = ctypes.create_unicode_buffer(64)
+            user32.GetClassNameW(h, name, 64)
+            if name.value == "Chrome_WidgetWin_1":
+                title = ctypes.create_unicode_buffer(256)
+                user32.GetWindowTextW(h, title, 256)
+                if title.value == "NTChat" or title.value.endswith(" · NTChat"):  # the app window, not a browser tab
+                    found.append(h)
+            return True
+        user32.EnumWindows(each, 0)
+        return found
+
+    while True:
+        try:
+            for h in windows():
+                dpi = (dpi_of(h) if dpi_of else 0) or 96
+                big, small = icon(round(32 * dpi / 96)), icon(round(16 * dpi / 96))
+                if big and user32.SendMessageW(h, 0x7F, 1, None) != big:  # WM_GETICON, ICON_BIG
+                    user32.SendMessageW(h, 0x80, 1, big)  # WM_SETICON, ICON_BIG
+                    user32.SendMessageW(h, 0x80, 0, small)  # WM_SETICON, ICON_SMALL
+        except Exception:
+            pass
+        time.sleep(0.5)
+
+
 def main():
     os.makedirs(SITES, exist_ok=True)
     os.makedirs(DATA, exist_ok=True)
@@ -2170,6 +2222,7 @@ def main():
     threading.Thread(target=sites.serve_forever, daemon=True).start()
     threading.Thread(target=gpu_idle_watcher, daemon=True).start()
     threading.Thread(target=update_watcher, daemon=True).start()
+    threading.Thread(target=window_icon_keeper, daemon=True).start()
     ThreadingHTTPServer((CHAT_BIND, CHAT_PORT), ChatHandler).serve_forever()
 
 
