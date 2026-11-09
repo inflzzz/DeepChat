@@ -5084,6 +5084,15 @@ input.addEventListener('input', warmUp);
 // While NTChat is on screen the models stay on the video card; the PC frees it about 10 minutes after it leaves the screen
 function sayOnScreen() { if (!document.hidden) localApi('/api/presence', {}); }
 setInterval(sayOnScreen, 60000);
+// Tells the server this page is open, and when it closes (so it can take the models off the video card right away)
+const PAGE_ID = Math.random().toString(36).slice(2, 12);
+const pageBeat = () => localApi('/api/aberta', { id: PAGE_ID });
+pageBeat();
+setInterval(pageBeat, 30000);
+addEventListener('pagehide', () => {
+  try { fetch('/api/fechou', { method: 'POST', keepalive: true, headers: { 'X-Chat': '1', 'Content-Type': 'application/json' }, body: JSON.stringify({ id: PAGE_ID }) }); } catch {}
+});
+addEventListener('pageshow', e => { if (e.persisted) pageBeat(); }); // coming back from the browser's back/forward cache
 input.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
 });

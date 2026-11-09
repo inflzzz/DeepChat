@@ -809,14 +809,17 @@ def gpu_state():
     return {"image": comfy_loaded, "generator": comfy_running()}
 
 
-def gpu_idle_check():
-    """Frees the video card once NTChat has been off screen for a while (minimized, another tab, phone screen off)."""
+def gpu_idle_check(closed=False):
+    """Frees the video card once NTChat has been off screen for a while (minimized, another tab, phone screen off),
+    or right away when the last NTChat page was closed. Never while something is being made."""
     global chat_warm
     with activity_lock:
         busy, last = activity["busy"], activity["last"]
-    if busy or image_lock.locked() or time.time() - max(presence["at"], last, last_image_at) < GPU_IDLE_SECONDS:
-        return
-    if chat_warm:
+    if busy or image_lock.locked():
+        return False
+    if not closed and time.time() - max(presence["at"], last, last_image_at) < GPU_IDLE_SECONDS:
+        return False
+    if chat_warm or closed:  # on close, also a model left loaded by an earlier run of the server
         chat_warm = False
         unload_chat()
     if comfy_running():
@@ -824,12 +827,64 @@ def gpu_idle_check():
             stop_comfy()
         except UserError:
             pass
+    return True
 
 
 def gpu_idle_watcher():
     while True:
         time.sleep(30)
         gpu_idle_check()
+
+
+# Open NTChat pages (PC and phone): each says "I'm open" every 30 s and "I'm closing" when it closes
+PAGE_ALIVE_SECONDS = 90
+CLOSED_GRACE_SECONDS = 8  # a reload (F5) closes and opens again within this time
+open_pages = {}
+page_closed_at = 0.0
+pages_lock = threading.Lock()
+
+
+def page_open(page_id):
+    global page_closed_at
+    page_id = str(page_id or "")[:40]
+    if page_id:
+        with pages_lock:
+            open_pages[page_id] = time.time()
+            page_closed_at = 0.0
+    return {"ok": True}
+
+
+def page_close(page_id):
+    global page_closed_at
+    with pages_lock:
+        open_pages.pop(str(page_id or "")[:40], None)
+        page_closed_at = time.time()
+    return {"ok": True}
+
+
+def pages_check(now=None):
+    """True when the card was freed because the last page closed. Waits while something is being made."""
+    global page_closed_at
+    now = now or time.time()
+    with pages_lock:
+        for k in [k for k, t in open_pages.items() if now - t > PAGE_ALIVE_SECONDS]:
+            del open_pages[k]
+        if not page_closed_at or open_pages or now - page_closed_at < CLOSED_GRACE_SECONDS:
+            return False
+    if gpu_idle_check(closed=True):
+        with pages_lock:
+            page_closed_at = 0.0
+        return True
+    return False
+
+
+def pages_watcher():
+    while True:
+        time.sleep(2)
+        try:
+            pages_check()
+        except Exception:
+            pass
 
 
 def image_workflow(prompt, width, height, seed):
@@ -1871,7 +1926,7 @@ def update_watcher():
             run_update()
         time.sleep(UPDATE_EVERY)
 
-QUIET_PATHS = {"/api/sync", "/api/health", "/api/presence", "/api/gpu", "/api/update", "/api/image-models", "/api/celular", "/chat.html", "/i18n.js", "/manifest.webmanifest"}
+QUIET_PATHS = {"/api/sync", "/api/health", "/api/presence", "/api/aberta", "/api/fechou", "/api/gpu", "/api/update", "/api/image-models", "/api/celular", "/chat.html", "/i18n.js", "/manifest.webmanifest"}
 
 
 def keep_chat_ready(raw):
@@ -2147,6 +2202,10 @@ class ChatHandler(QuietHandler):
         elif path == "/api/presence":
             presence["at"] = time.time()
             self.send_json({"ok": True})
+        elif path == "/api/aberta":
+            self.send_json(page_open(data.get("id")))
+        elif path == "/api/fechou":
+            self.send_json(page_close(data.get("id")))
         elif path == "/api/warm":
             self.run_api(lambda: warm_up(data.get("ctx"), data.get("image")))
         elif path == "/api/free-gpu":
@@ -2364,6 +2423,7 @@ def main():
     sites = ThreadingHTTPServer(("127.0.0.1", SITES_PORT), partial(QuietHandler, directory=SITES))
     threading.Thread(target=sites.serve_forever, daemon=True).start()
     threading.Thread(target=gpu_idle_watcher, daemon=True).start()
+    threading.Thread(target=pages_watcher, daemon=True).start()
     threading.Thread(target=update_watcher, daemon=True).start()
     threading.Thread(target=window_icon_keeper, daemon=True).start()
     threading.Thread(target=reminders_watcher, daemon=True).start()
