@@ -11,6 +11,8 @@ param(
     [switch]$Atualizando,     # used by the automatic update: no questions, no shortcuts, doesn't open the app
     [switch]$SoVerificar,     # only show what it would do, without downloading or installing anything
     [string]$PlacaFalsa = '', # test the GPU detection with another card name (e.g. "AMD Radeon RX 7800 XT")
+    [double]$VramFalsa = 0,   # test the model recommendation with another card memory in GB (e.g. 6)
+    [string]$ModeloChat = '', # chat model without asking: "ntchat" (9B) or "lite" (4B)
     [string]$Idioma = ''      # pt or en (default: the Windows language)
 )
 
@@ -110,8 +112,16 @@ if ($Atualizando) { $SemAtalhos = $true; $NaoAbrir = $true }
 
 $UV_URL = 'https://github.com/astral-sh/uv/releases/download/0.13.6/uv-x86_64-pc-windows-msvc.zip'
 $OLLAMA_URL = 'https://ollama.com/download/OllamaSetup.exe'
-$MODELO_HF = 'hf.co/mradermacher/DeepSeek-V4-Pro-Qwen3.5-9B-UNCENSORED-heretic-i1-GGUF:Q4_K_M'
-$VISAO_URL = 'https://huggingface.co/mradermacher/DeepSeek-V4-Pro-Qwen3.5-9B-UNCENSORED-heretic-GGUF/resolve/main/DeepSeek-V4-Pro-Qwen3.5-9B-UNCENSORED-heretic.mmproj-Q8_0.gguf'
+# The chat model, by the card's memory. Both are the same uncensored DeepSeek-V4-Pro distill of Qwen3.5 (xtools-at,
+# Heretic): the 9B is smarter, the 4B fits smaller cards and runs faster on the processor. GB = model + image file.
+$MODELOS_CHAT = @(
+    @{ Chave = 'ntchat'; Tag = 'ntchat:latest'; Nome = 'NTChat'; GB = 6.3; Desc = (T 'o mais inteligente, pra placas de 8 GB ou mais' 'the smartest, for cards with 8 GB or more')
+       HF = 'hf.co/mradermacher/DeepSeek-V4-Pro-Qwen3.5-9B-UNCENSORED-heretic-i1-GGUF:Q4_K_M'
+       Visao = 'https://huggingface.co/mradermacher/DeepSeek-V4-Pro-Qwen3.5-9B-UNCENSORED-heretic-GGUF/resolve/main/DeepSeek-V4-Pro-Qwen3.5-9B-UNCENSORED-heretic.mmproj-Q8_0.gguf' },
+    @{ Chave = 'lite'; Tag = 'ntchat-lite:latest'; Nome = 'NTChat Lite'; GB = 3.1; Desc = (T 'mais leve e rápido, pra placas menores ou sem placa' 'lighter and faster, for smaller cards or no card')
+       HF = 'hf.co/mradermacher/DeepSeek-V4-Pro-Qwen3.5-4B-UNCENSORED-heretic-i1-GGUF:Q4_K_M'
+       Visao = 'https://huggingface.co/mradermacher/DeepSeek-V4-Pro-Qwen3.5-4B-UNCENSORED-heretic-GGUF/resolve/main/DeepSeek-V4-Pro-Qwen3.5-4B-UNCENSORED-heretic.mmproj-Q8_0.gguf' }
+)
 $COMFY_URL = 'https://github.com/Comfy-Org/ComfyUI/releases/download/v0.44.0/ComfyUI_windows_portable_{0}.7z'
 $ESRGAN_URL = 'https://huggingface.co/Comfy-Org/Real-ESRGAN_repackaged/resolve/main/RealESRGAN_x4plus.safetensors'
 $SETEZIP_URL = 'https://www.7-zip.org/a/7zr.exe'
@@ -134,7 +144,9 @@ $LISTA_EXTRAS = @(
 # The image models. Which files they download (and from where) lives in server.py, which this installer calls to download them.
 # The sizes here are only to show in the menu: per kind of card (the RTX 50 gets the smallest files).
 $MODELOS_IMAGEM = @(
-    @{ Chave = 'chroma'; Nome = 'Chroma1-HD'; Desc = (T 'sem censura, o mais detalhado (~2 min)' 'uncensored, the most detailed (~2 min)'); Recomendado = $false
+    @{ Chave = 'chromaflash'; Nome = 'Chroma Flash'; Desc = (T 'sem censura, detalhado e rápido (~30 s)' 'uncensored, detailed and fast (~30 s)'); Recomendado = $true
+       GB = @{ nvidia50 = 15.2; nvidia = 15.2; amd = 23.8; intel = 23.8 }; Pasta = 'loras'; Nomes = @('Chroma1-Flash_LoRA_rank64.safetensors') },
+    @{ Chave = 'chroma'; Nome = 'Chroma1-HD'; Desc = (T 'sem censura, o mais detalhado (~1 a 2 min)' 'uncensored, the most detailed (~1 to 2 min)'); Recomendado = $false
        GB = @{ nvidia50 = 14.7; nvidia = 14.7; amd = 23.3; intel = 23.3 }; Pasta = 'diffusion_models'; Nomes = @('Chroma1-HD-fp8mixed.safetensors', 'Chroma1-HD.safetensors') },
     @{ Chave = 'zimage'; Nome = 'Z-Image Turbo'; Desc = (T 'cria imagens rápido (~10 s)' 'creates images fast (~10 s)'); Recomendado = $true
        GB = @{ nvidia50 = 10.0; nvidia = 17.4; amd = 19.7; intel = 19.7 }; Pasta = 'diffusion_models'; Nomes = @('z_image_turbo_nvfp4.safetensors', 'z_image_turbo_bf16.safetensors') },
@@ -230,6 +242,26 @@ function Detectar-Placa {
 
     $todas = if ($nomes.Count) { $nomes -join ', ' } else { T 'nenhuma' 'none' }
     return @{ Nome = $todas; Imagens = $false; Tipo = 'nvidia'; Motivo = (T 'não achei uma placa NVIDIA, AMD Radeon RX ou Intel Arc' 'no NVIDIA, AMD Radeon RX or Intel Arc card found') }
+}
+
+# The graphics card's memory in GB. The registry has the real size; Win32_VideoController stops at 4 GB.
+function Memoria-Placa {
+    if ($VramFalsa) { return $VramFalsa }
+    $bytes = 0
+    try {
+        Get-ChildItem 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}' -ErrorAction SilentlyContinue | ForEach-Object {
+            $p = Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue
+            foreach ($v in @($p.'HardwareInformation.qwMemorySize', $p.'HardwareInformation.MemorySize')) {
+                if ($v -is [byte[]]) { $v = if ($v.Length -ge 8) { [BitConverter]::ToInt64($v, 0) } elseif ($v.Length -ge 4) { [BitConverter]::ToUInt32($v, 0) } else { 0 } }
+                if ($v -and [double]$v -gt $bytes) { $bytes = [double]$v }
+            }
+        }
+    } catch { }
+    if (-not $bytes) {
+        $smi = Get-Command nvidia-smi -ErrorAction SilentlyContinue
+        if ($smi) { try { $mb = & $smi.Source --query-gpu=memory.total --format=csv,noheader,nounits | Select-Object -First 1; if ($mb) { $bytes = [double]$mb * 1MB } } catch { } }
+    }
+    return [math]::Round($bytes / 1GB, 1)
 }
 
 # Unzips with .NET directly. Expand-Archive lives in a PowerShell module that fails to load on some
@@ -362,6 +394,27 @@ if ($placa.Imagens) {
     Aviso (T 'O chat, a pesquisa na internet, os sites, a voz e as figurinhas funcionam normalmente.' 'Chat, web search, websites, voice and stickers work normally.')
 }
 
+# The chat model: NTChat on cards with 8 GB or more, NTChat Lite on smaller ones (or without a card)
+$vram = Memoria-Placa
+if ($vram) { Info "$(T 'Memória da placa de vídeo' 'Graphics card memory'): $(Tamanho $vram)" }
+$chaveRecomendada = if ($vram -ge 7.5) { 'ntchat' } else { 'lite' }
+foreach ($m in $MODELOS_CHAT) { $m.Recomendado = ($m.Chave -eq $chaveRecomendada) }
+$chatEscolhido = $MODELOS_CHAT | Where-Object { $_.Tag -eq $Modelo } | Select-Object -First 1
+$porque = if (-not $vram) { T 'Sem placa de vídeo dedicada: o melhor aqui é o NTChat Lite, que roda mais rápido no processador.' 'No dedicated graphics card: NTChat Lite is the best here, it runs faster on the processor.' }
+          elseif ($chaveRecomendada -eq 'lite') { T "Sua placa tem $(Tamanho $vram): o melhor pra ela é o NTChat Lite." "Your card has $(Tamanho $vram): NTChat Lite is the best for it." }
+          else { T "Sua placa tem $(Tamanho $vram): ela roda o NTChat completo." "Your card has $(Tamanho $vram): it runs the full NTChat." }
+function Mostrar-Modelos {
+    $ligado = Ollama-Ligado
+    $linhas = @()
+    for ($i = 0; $i -lt $MODELOS_CHAT.Count; $i++) {
+        $m = $MODELOS_CHAT[$i]
+        $tam = if ($ligado -and (Tem-Modelo $m.Tag)) { T 'instalado' 'installed' } else { Tamanho $m.GB }
+        $marca = if ($m.Recomendado) { '✓' } else { ' ' }
+        $linhas += "$($i + 1)  $marca $($m.Nome.PadRight(14))$($m.Desc.PadRight(52))$($tam.PadLeft(10))"
+    }
+    Caixa $linhas
+}
+
 # One list: the extras, then the image models (when this card can make images and they aren't managed in the app yet)
 $mostrarImagens = $placa.Imagens -and -not $imagensJaTem
 $Opcoes = @($LISTA_EXTRAS | ForEach-Object { @{ Tipo = 'extra'; Item = $_ } })
@@ -384,8 +437,9 @@ function Mostrar-Menu {
 
 if ($SoVerificar) {
     Titulo (T 'Só verificando (nada foi baixado)' 'Only checking (nothing was downloaded)')
-    $estadoModelo = if (Ollama-Ligado) { if (Tem-Modelo $Modelo) { T '(já instalado)' '(already installed)' } else { T '(falta instalar, ~6 GB)' '(not installed yet, ~6 GB)' } } else { T '(Ollama desligado ou não instalado)' '(Ollama off or not installed)' }
-    Info "$(T 'Modelo do chat' 'Chat model'): $Modelo $estadoModelo"
+    Info "$(T 'Modelo do chat' 'Chat model'): $Modelo$(if (-not (Ollama-Ligado)) { T ' (Ollama desligado ou não instalado)' ' (Ollama off or not installed)' })"
+    Info $porque
+    Mostrar-Modelos
     Info "Ollama: $(if (Achar-Ollama) { T 'instalado' 'installed' } else { T 'falta instalar' 'not installed yet' })"
     Info "$(T 'Python do app' 'App Python'): $(if (Python-Ok (Join-Path $Venv 'Scripts\python.exe')) { T 'pronto' 'ready' } else { T 'falta instalar' 'not installed yet' })"
     if ($placa.Imagens) { Info "ComfyUI: $(if ($imagensJaTem) { "$(T 'instalado em' 'installed in') $ComfyPasta" } else { "$(T 'baixaria' 'would download') $($COMFY_URL -f $placa.Build)" })" }
@@ -407,7 +461,25 @@ $extrasEscolhidos = @()
 if ($Atualizando) {
     $extrasEscolhidos = @($LISTA_EXTRAS | Where-Object { Modulos-Ok (Join-Path $Venv 'Scripts\python.exe') $_.Modulos } | ForEach-Object { $_.Chave })
 } else {
-    $perguntar = -not ($Extras -or $Modelos -or $ComImagens -or $SemImagens)
+    $perguntar = -not ($Extras -or $Modelos -or $ComImagens -or $SemImagens -or $ModeloChat)
+    # The chat model is picked on the first install; after that, config.json keeps it
+    if (-not $ConfigAtual) {
+        $chatEscolhido = if ($ModeloChat) { $MODELOS_CHAT | Where-Object { $_.Chave -eq $ModeloChat } | Select-Object -First 1 }
+        if (-not $chatEscolhido) { $chatEscolhido = $MODELOS_CHAT | Where-Object { $_.Recomendado } | Select-Object -First 1 }
+        if ($perguntar) {
+            Titulo (T 'Modelo do chat' 'Chat model')
+            Info $porque
+            Mostrar-Modelos
+            Write-Host ''
+            Escrever '    ? ' 'Cyan' @(120, 180, 230)
+            $r = Read-Host (T 'Enter = o recomendado (✓) · 1 ou 2' 'Enter = the recommended one (✓) · 1 or 2')
+            $n = [regex]::Match("$r", '[12]').Value
+            if ($n) { $chatEscolhido = $MODELOS_CHAT[[int]$n - 1] }
+            Ok "$(T 'Modelo do chat' 'Chat model'): $($chatEscolhido.Nome)"
+        }
+        $Modelo = $chatEscolhido.Tag
+        $ModeloNome = $chatEscolhido.Nome
+    }
     if ($Extras -and $Extras -ne 'nenhum') { $extrasEscolhidos = @($Extras.Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $todosExtras -contains $_ }) }
     if ($placa.Imagens) {
         if ($ComImagens) { $escolhidos = $todasImagens }
@@ -466,7 +538,8 @@ Passo 'Ollama'
 $ollama = Achar-Ollama
 $precisa = 0
 if (-not $ollama) { $precisa += 3 }
-if (-not ($ollama -and (Ollama-Ligado) -and (Tem-Modelo $Modelo))) { $precisa += 7 }
+if (-not $chatEscolhido) { $chatEscolhido = $MODELOS_CHAT[0] }  # a model of their own in config.json: it is not downloaded here
+if (-not ($ollama -and (Ollama-Ligado) -and (Tem-Modelo $Modelo))) { $precisa += [math]::Ceiling($chatEscolhido.GB) + 1 }
 if ($precisa) {
     $disco = $env:SystemDrive.TrimEnd(':')
     $livreSistema = [math]::Floor((Get-PSDrive -Name $disco).Free / 1GB)
@@ -499,18 +572,18 @@ Passo "$(T 'Modelo do chat' 'Chat model') ($Modelo)"
 if (Tem-Modelo $Modelo) {
     Ok (T 'Já instalado.' 'Already installed.')
 } else {
-    Info (T 'Baixando o modelo (uns 6 GB, só na primeira vez)...' 'Downloading the model (about 6 GB, only the first time)...')
-    & $ollama pull $MODELO_HF
+    Info "$(T 'Baixando o modelo' 'Downloading the model') $($chatEscolhido.Nome) ($(T 'uns' 'about') $(Tamanho $chatEscolhido.GB), $(T 'só na primeira vez' 'only the first time'))..."
+    & $ollama pull $chatEscolhido.HF
     if ($LASTEXITCODE -ne 0) { throw (T 'Não deu pra baixar o modelo do chat.' 'Could not download the chat model.') }
     $visao = Join-Path $Baixados 'visao-mmproj-Q8_0.gguf'
-    Baixar $VISAO_URL $visao
-    $base = & $ollama show --modelfile $MODELO_HF | Where-Object { $_ -match '^FROM\s+' } | Select-Object -First 1
+    Baixar $chatEscolhido.Visao $visao
+    $base = & $ollama show --modelfile $chatEscolhido.HF | Where-Object { $_ -match '^FROM\s+' } | Select-Object -First 1
     if (-not $base) { throw (T 'Não achei o arquivo do modelo baixado.' 'Could not find the downloaded model file.') }
     $modelfile = Join-Path $Baixados 'Modelfile'
     [IO.File]::WriteAllLines($modelfile, [string[]]@($base, "FROM $visao", 'PARAMETER stop <|im_start|>', 'PARAMETER stop <|im_end|>'), $SemBOM)
     & $ollama create $Modelo -f $modelfile
     if ($LASTEXITCODE -ne 0) { throw (T 'Não deu pra montar o modelo do chat.' 'Could not build the chat model.') }
-    & $ollama rm $MODELO_HF | Out-Null
+    & $ollama rm $chatEscolhido.HF | Out-Null
     Ok (T 'Modelo pronto.' 'Model ready.')
 }
 

@@ -1101,6 +1101,10 @@ body.sb-collapsed .only-collapsed { display: inline-flex; }
           <button class="btn" data-action="update-now" hidden><span data-icon="download"></span>Atualizar agora</button>
         </div>
       </div>
+      <div class="field" id="lembretes-field" hidden>
+        <span class="f-label">Lembretes</span>
+        <ul id="lembretes-list" class="mem-list"></ul>
+      </div>
       <div class="field pc-only">
         <span class="f-label">Tour</span>
         <div class="row-btns">
@@ -1494,6 +1498,7 @@ const ICONS = {
   code: '<path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/>',
   calc: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01M8 18h.01M12 18h.01M16 18h.01"/>',
   mic: '<rect width="6" height="12" x="9" y="2" rx="3"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 18v4"/>',
+  bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
   waves: '<path d="M2 10v3"/><path d="M6 6v11"/><path d="M10 3v18"/><path d="M14 8v7"/><path d="M18 5v13"/><path d="M22 10v3"/>',
   printer: '<path d="M6 9V3h12v6"/><rect width="16" height="8" x="4" y="9" rx="2"/><path d="M7 17h10v4H7z"/>',
   type: '<path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/>',
@@ -2463,6 +2468,10 @@ function systemPrompt(web, img, chat, extra = {}) {
   if (extra.calc) {
     parts.push(L('Contas: nunca faça contas de cabeça, nem enquanto pensa. Sempre que a resposta tiver um número que precisa ser calculado (soma, porcentagem, desconto, juros, média, conversão), chame a ferramenta calcular antes de responder, com a conta inteira numa expressão só, e use exatamente o resultado dela.',
       'Math: never do math in your head, not even while thinking. Whenever the answer has a number that needs calculating (sum, percentage, discount, interest, average, conversion), call the calcular tool before answering, with the whole calculation in one expression, and use exactly its result.'));
+  }
+  if (extra.reminders) {
+    parts.push(L('Lembretes: quando o usuário pedir pra lembrar, avisar, despertar ou marcar um alarme, chame criar_lembrete. texto: o que lembrar, curto ("Ligar pro dentista"). dia: copie como ele falou ("hoje", "amanhã", "sexta", "25/12"), vazio se ele só disse a hora. hora: HH:MM em 24 horas ("9 da noite" é 21:00). "Daqui X minutos/horas" vai em daqui_minutos. Não faça contas de data: só copie. Depois confirme numa frase curta com o dia e a hora.',
+      'Reminders: when the user asks to be reminded, warned, woken up or for an alarm, call criar_lembrete. texto: what to remind, short ("Call the dentist"). dia: copy it as they said it ("today", "tomorrow", "friday", "12/25"), empty if they only said the time. hora: HH:MM, 24-hour ("9 pm" is 21:00). "In X minutes/hours" goes in daqui_minutos. Do not do date math: just copy. Then confirm in one short sentence with the day and time.'));
   }
   if (extra.voice) {
     parts.push(L('Conversa por voz: o usuário está falando com você e vai ouvir a resposta. Responda curto (1 a 3 frases), como numa conversa falada, sem listas, títulos, tabelas, código, links nem emojis.',
@@ -3440,6 +3449,8 @@ function stepHTML(s) {
     label = s.running ? `Calculando ${s.expr}…` : s.error ? `Não deu pra calcular ${s.expr}: ${s.error}` : `Calculou ${s.expr} = ${s.result}`;
   } else if (s.type === 'photo') {
     label = s.running ? 'Editando a foto' : s.error ? `Não deu pra editar a foto: ${s.error}` : `Editou a foto em ${fmtSecs(s.seconds || 0)}`;
+  } else if (s.type === 'reminder') {
+    label = s.running ? 'Marcando o lembrete' : s.error ? `Não deu pra marcar o lembrete: ${s.error}` : `Lembrete marcado · ${reminderWhen(s.quando)} · ${s.texto}`;
   } else if (s.type === 'recall') {
     const n = s.chats?.length || 0;
     label = s.running ? 'Procurando nas conversas' : n ? `Lembrou de ${n} ${n === 1 ? 'conversa' : 'conversas'}` : 'Não achou nas conversas antigas';
@@ -3464,7 +3475,7 @@ function stepHTML(s) {
       list = `<ul><li class="prompt">${esc(s.prompt)}</li></ul>`;
     }
   }
-  const icon = s.running ? '<span class="spinner"></span>' : I({ fetch: 'page', image: 'image', photo: 'image', calc: 'calc', recall: 'search' }[s.type] || 'globe');
+  const icon = s.running ? '<span class="spinner"></span>' : I({ fetch: 'page', image: 'image', photo: 'image', calc: 'calc', recall: 'search', reminder: 'bell' }[s.type] || 'globe');
   return `<details class="step${s.error ? ' err' : ''}"><summary>${icon}<span>${esc(label)}</span></summary>${list}</details>`;
 }
 // Many web steps (deep research) fold into one line that opens to show them.
@@ -3694,6 +3705,73 @@ function wantsImageText(chat) {
   return TEXT_WORDS.test(text) && !NO_TEXT.test(text);
 }
 
+// ---------- reminders: "me avisa amanhã às 9" -> a Windows notification on the PC at that time ----------
+const REMINDER_TOOL = {
+  type: 'function',
+  function: {
+    name: 'criar_lembrete',
+    description: L('Marca um lembrete: no horário, aparece uma notificação do Windows no PC, com som. Use quando o usuário pedir pra lembrar, avisar, despertar ou marcar um alarme.',
+      'Sets a reminder: at that time a Windows notification with sound shows up on the PC. Use it when the user asks to be reminded, warned, woken up or for an alarm.'),
+    parameters: { type: 'object', properties: {
+      texto: { type: 'string', description: L('O que lembrar, curto. Ex.: "Ligar pro dentista"', 'What to remind, short. E.g. "Call the dentist"') },
+      dia: { type: 'string', description: L('O dia como ele falou: "hoje", "amanhã", "depois de amanhã", "sexta", "25/12". Vazio se ele só disse a hora.', 'The day as they said it: "today", "tomorrow", "friday", "12/25". Empty if they only said the time.') },
+      hora: { type: 'string', description: L('A hora em HH:MM, 24 horas ("9 da noite" é 21:00).', 'The time as HH:MM, 24-hour ("9 pm" is 21:00).') },
+      daqui_minutos: { type: 'integer', description: L('Só quando ele disser "daqui X minutos/horas": quantos minutos a partir de agora.', 'Only when they say "in X minutes/hours": how many minutes from now.') }
+    }, required: ['texto'] }
+  }
+};
+const WEEKDAYS = { domingo: 0, segunda: 1, terca: 2, quarta: 3, quinta: 4, sexta: 5, sabado: 6, sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
+// The exact moment from the words the model copied ("amanhã" + "09:00"); null when it can't tell
+function reminderTime(a, now = new Date()) {
+  const norm = v => String(v ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
+  const mins = Number(a?.daqui_minutos);
+  if (mins > 0) return new Date(now.getTime() + Math.round(mins) * 60000);
+  const h = norm(a?.hora);
+  let hh = 9, mm = 0, hasTime = false, m;
+  if (/meio[- ]?dia|noon/.test(h)) { hh = 12; hasTime = true; }
+  else if (/meia[- ]?noite|midnight/.test(h)) { hh = 0; hasTime = true; }
+  else if ((m = h.match(/(\d{1,2})(?:\s*[:h.]\s*(\d{2}))?/))) {
+    hh = +m[1]; mm = +(m[2] || 0); hasTime = true;
+    if (/pm|tarde|noite/.test(h) && hh < 12) hh += 12;
+  }
+  if (hh > 23 || mm > 59) return null;
+  const d = norm(a?.dia).replace(/-?feira|que vem|proxim[ao]s?|^(na|no|de|em|on|next|this)\s+/g, '').replace(/\s+/g, ' ').trim();
+  if (!d && !hasTime) return null;
+  const at = new Date(now);
+  at.setHours(hh, mm, 0, 0);
+  // only the time, or "today" at a time that already went by: the next time it comes
+  if (!d || d === 'hoje' || d === 'today') { if (at <= now) at.setDate(at.getDate() + 1); return at; }
+  if (d === 'amanha' || d === 'tomorrow') { at.setDate(at.getDate() + 1); return at; }
+  if (d === 'depois de amanha' || d === 'day after tomorrow') { at.setDate(at.getDate() + 2); return at; }
+  if (d in WEEKDAYS) {
+    let add = (WEEKDAYS[d] - now.getDay() + 7) % 7;
+    if (add === 0 && at <= now) add = 7;
+    at.setDate(at.getDate() + add);
+    return at;
+  }
+  if ((m = d.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/))) {
+    const t = new Date(+m[1], +m[2] - 1, +m[3], hh, mm);
+    return t.getDate() === +m[3] ? t : null;
+  }
+  if ((m = d.match(/^(?:dia\s*)?(\d{1,2})(?:\s*[/.-]\s*(\d{1,2})(?:\s*[/.-]\s*(\d{2,4}))?)?$/))) {
+    const day = +m[1];
+    const month = m[2] ? +m[2] - 1 : now.getMonth();
+    const year = m[3] ? (+m[3] < 100 ? 2000 + +m[3] : +m[3]) : now.getFullYear();
+    let t = new Date(year, month, day, hh, mm);
+    if (!m[3] && t <= now) t = m[2] ? new Date(year + 1, month, day, hh, mm) : new Date(year, month + 1, day, hh, mm);
+    return t.getDate() === day ? t : null;
+  }
+  return null;
+}
+function reminderWhen(ms) {
+  const d = new Date(ms), now = new Date();
+  const tomorrow = new Date(now); tomorrow.setDate(now.getDate() + 1);
+  const same = (x, y) => x.toDateString() === y.toDateString();
+  const day = same(d, now) ? L('hoje', 'today') : same(d, tomorrow) ? L('amanhã', 'tomorrow')
+    : d.toLocaleDateString(LOCALE, { weekday: 'long', day: 'numeric', month: 'numeric' });
+  return `${day}, ${d.toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit' })}`;
+}
+
 // ---------- old chats: finds what was said in the other saved conversations (all local, on the PC and the phone) ----------
 const RECALL_TOOL = {
   type: 'function',
@@ -3849,6 +3927,17 @@ async function runTool(call, step, signal, opts = {}) {
     step.seconds = r.seconds;
     step.images = [{ src: await toJpeg(r.image), prompt: step.prompt, file: r.file, seconds: r.seconds, modelo: 'klein', fonte: r.source, fonte2: r.source2 || undefined }];
     return L('A foto editada já está aparecendo para o usuário.', 'The edited photo is already showing to the user.');
+  }
+  if (name === 'criar_lembrete') {
+    step.type = 'reminder';
+    step.texto = String(args.texto || args.text || '').trim().slice(0, 300);
+    const when = reminderTime(args);
+    if (!when) { step.error = L('não entendi o dia ou a hora', "couldn't tell the day or time"); return L('Não entendi o dia ou a hora. Pergunte ao usuário quando ele quer o lembrete.', "Couldn't tell the day or time. Ask the user when they want the reminder."); }
+    const r = await localApi('/api/lembretes', { acao: 'criar', texto: step.texto, quando: when.getTime() }, signal);
+    if (r.error) { step.error = r.error; return `${L('Não deu pra marcar o lembrete', 'Could not set the reminder')}: ${r.error}`; }
+    step.quando = when.getTime();
+    return L(`Lembrete marcado pra ${reminderWhen(step.quando)} (${when.toLocaleDateString(LOCALE)}): "${step.texto}". Confirme pro usuário numa frase curta com o dia e a hora.`,
+      `Reminder set for ${reminderWhen(step.quando)} (${when.toLocaleDateString(LOCALE)}): "${step.texto}". Confirm it to the user in one short sentence with the day and time.`);
   }
   if (name === 'lembrar_conversas') {
     step.type = 'recall';
@@ -4176,6 +4265,7 @@ let features = { images: true, voice: true, stickers: true, photo_edit: false };
 let imageModels = []; // [{ key, name }] installed on the PC, best first
 const IMAGE_MODEL_LABELS = {
   chroma: { short: 'Chroma', name: 'Chroma1-HD', note: L('sem censura', 'uncensored') },
+  chromaflash: { short: 'Chroma Flash', name: 'Chroma Flash', note: L('sem censura, 3x mais rápido', 'uncensored, 3x faster') },
   zimage: { short: 'Z-Image', name: 'Z-Image Turbo', note: L('rápido', 'fast') },
   sd15: { short: 'SD 1.5', name: 'Stable Diffusion 1.5', note: L('instantâneo', 'instant') }
 };
@@ -4277,7 +4367,8 @@ async function generate(chat, opts = {}) {
   const autoWeb = !web && !deep && !cont && settings.autoWeb;
   const photoOn = imgOn && features.photo_edit && !!lastPhoto(chat);
   const recallOn = !cont && chats.some(c => c.id !== chat.id && c.messages?.length);
-  const toolList = cont ? [] : [...(web || autoWeb ? TOOLS : []), ...(imgOn && imageModels.length ? [IMAGE_TOOL] : []), ...(photoOn ? [PHOTO_TOOL] : []), CALC_TOOL, ...(recallOn ? [RECALL_TOOL] : [])];
+  const remindersOn = !cont && !!features.lembretes;
+  const toolList = cont ? [] : [...(web || autoWeb ? TOOLS : []), ...(imgOn && imageModels.length ? [IMAGE_TOOL] : []), ...(photoOn ? [PHOTO_TOOL] : []), CALC_TOOL, ...(recallOn ? [RECALL_TOOL] : []), ...(remindersOn ? [REMINDER_TOOL] : [])];
   const genImages = [];
   const think = !cont && shouldThink(chat, imgOn);
   art.dismissed = false;
@@ -4305,7 +4396,7 @@ async function generate(chat, opts = {}) {
   abortCtl = new AbortController();
   const signal = abortCtl.signal;
 
-  const sys = systemPrompt(web, imgOn, chat, { autoWeb, calc: !cont, photo: photoOn, recall: recallOn, voice: !!opts.voice });
+  const sys = systemPrompt(web, imgOn, chat, { autoWeb, calc: !cont, photo: photoOn, recall: recallOn, voice: !!opts.voice, reminders: remindersOn });
   const setLabel = label => {
     waitLabel = label;
     waitStart = performance.now();
@@ -4411,7 +4502,7 @@ async function generate(chat, opts = {}) {
       for (const call of calls) {
         const name = call.function?.name;
         const a = parseArgs(call.function?.arguments);
-        const step = { type: { abrir_pagina: 'fetch', gerar_imagem: 'image', editar_foto: 'photo', calcular: 'calc', lembrar_conversas: 'recall' }[name] || 'search', running: true, query: a.consulta || a.assunto || '', url: a.url || '', prompt: a.descricao || a.pedido || '', expr: a.expressao || '' };
+        const step = { type: { abrir_pagina: 'fetch', gerar_imagem: 'image', editar_foto: 'photo', calcular: 'calc', lembrar_conversas: 'recall', criar_lembrete: 'reminder' }[name] || 'search', running: true, query: a.consulta || a.assunto || '', url: a.url || '', prompt: a.descricao || a.pedido || '', expr: a.expressao || '' };
         steps.push(step);
         paintSteps(el, steps);
         step.startedAt = performance.now();
@@ -4451,7 +4542,7 @@ async function generate(chat, opts = {}) {
 
   const p = parseThink(answer);
   const thinking = thinkField || p.thinking;
-  const cleanSteps = steps.map(s => ({ type: s.type, query: s.query || undefined, url: s.url || undefined, prompt: s.prompt || undefined, seconds: s.seconds, count: s.images?.length || undefined, title: s.title, results: s.results, error: s.error, name: s.name, expr: s.expr || undefined, result: s.result, chats: s.chats }));
+  const cleanSteps = steps.map(s => ({ type: s.type, query: s.query || undefined, url: s.url || undefined, prompt: s.prompt || undefined, seconds: s.seconds, count: s.images?.length || undefined, title: s.title, results: s.results, error: s.error, name: s.name, expr: s.expr || undefined, result: s.result, chats: s.chats, texto: s.texto, quando: s.quando }));
   liveGen = null;
   if (chat.id === currentId) finishArtifact(p.answer); else art.live = false;
   if (cont && (p.answer || stopped)) {
@@ -4555,7 +4646,14 @@ function renderMe() {
   $('#me-name').textContent = name || tr('Você');
   $('#me-avatar').textContent = (name[0] || tr('Você')[0]).toUpperCase();
 }
+async function renderReminders() {
+  const r = features.lembretes ? await localApi('/api/lembretes') : {};
+  const items = r.lembretes || [];
+  $('#lembretes-field').hidden = !items.length;
+  $('#lembretes-list').innerHTML = items.map(x => `<li><span>${esc(reminderWhen(x.quando))} · ${esc(x.texto)}</span><button type="button" class="icon-btn sm" data-action="lembrete-cancelar" data-id="${esc(x.id)}" title="${esc(L('Cancelar', 'Cancel'))}">${I('x')}</button></li>`).join('');
+}
 function openSettings() {
+  renderReminders();
   $('#set-name').value = settings.name || '';
   $('#set-lang').value = settings.lang === 'pt' || settings.lang === 'en' ? settings.lang : 'auto';
   $('#set-instructions').value = settings.instructions;
@@ -4707,6 +4805,7 @@ document.addEventListener('click', e => {
     case 'open-projects': openProjects(); break;
     case 'open-prompter': openPrompter(); break;
     case 'tour-next': nextTourStep(); break;
+    case 'lembrete-cancelar': localApi('/api/lembretes', { acao: 'cancelar', id: t.dataset.id }).then(renderReminders); break;
     case 'tour-skip': endTour(); break;
     case 'tour-start': closeSettings(); startTour(); break;
     case 'pg-go': writePrompt(); break;

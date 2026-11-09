@@ -24,12 +24,13 @@ O instalador baixa e configura tudo sozinho, sem precisar de administrador:
 |---|---|---|
 | Python próprio (fica dentro da pasta do app) | servidor do chat | ~0,1 GB |
 | [Ollama](https://ollama.com) | roda o modelo de IA | ~3 GB |
-| Modelo **NTChat** (sem censura, entende imagens) | o cérebro do chat | ~6 GB |
+| Modelo **NTChat** (sem censura, entende imagens) | o cérebro do chat; em placas com menos de 8 GB o instalador recomenda o **NTChat Lite**, mais leve | ~6 GB (Lite: ~3 GB) |
 | Voz do NTChat ✓ (opcional) | lê as respostas e conversa por voz | 0,2 GB |
 | Microfone ✓ (opcional) | fala em vez de digitar | 0,6 GB |
 | Figurinhas (opcional) | recorta o fundo das imagens | 0,4 GB |
 | [ComfyUI](https://github.com/Comfy-Org/ComfyUI) (se escolher algum modelo de imagem) | roda os modelos de imagem | ~6 GB |
-| Chroma1-HD (opcional) | imagens sem censura e as mais detalhadas | 15 a 23 GB |
+| Chroma Flash ✓ (opcional) | imagens sem censura, detalhadas e rápidas (~30 s) | 15 a 24 GB |
+| Chroma1-HD (opcional) | imagens sem censura e as mais detalhadas, mais lentas | 15 a 23 GB |
 | Z-Image Turbo ✓ (opcional) | imagens rápidas, ótimo em foto | 10 a 20 GB |
 | Stable Diffusion 1.5 (opcional) | imagens instantâneas, com visual torto de IA antiga | 2,3 GB |
 | FLUX.2 klein ✓ (opcional) | edita as fotos que você manda | 4,4 a 12 GB |
@@ -84,7 +85,8 @@ Peça um site e ele aparece pronto ao lado da conversa. Dá pra ver como fica no
 
 Ligue **Imagem** e peça qualquer coisa: foto, meme, desenho. Escolha o modelo do lado do estilo:
 
-- **Chroma**: sem censura e o mais detalhado; leva uns 2 minutos por imagem.
+- **Chroma Flash**: sem censura, detalhado e uns 3 vezes mais rápido que o Chroma normal (uns 30 segundos por imagem).
+- **Chroma**: sem censura e o mais detalhado; leva de 1 a 2 minutos por imagem.
 - **Z-Image Turbo**: rápido (uns 10 segundos) e ótimo em foto realista.
 - **Stable Diffusion 1.5**: o modelo de 2022. Sai em segundos, com aquele visual torto e engraçado das IAs antigas.
 
@@ -145,6 +147,7 @@ Ele guarda sozinho o que você conta sobre você (dá pra ver e apagar cada item
 - **Anexa imagens, PDFs e arquivos de código**: ele lê e responde sobre eles.
 - **Ditado por voz**: fala que ele escreve (roda no PC, nada vai pra internet).
 - **Conversas longas** não "esquecem" o começo: quando a memória enche, ele resume as mensagens antigas sozinho.
+- **Lembretes**: diga "me avisa amanhã às 9 pra ligar pro dentista" e, na hora, aparece uma notificação do Windows com som, mesmo com o NTChat fechado.
 - **Contas sempre certas**: pra qualquer conta ele usa uma calculadora de verdade, em vez de fazer de cabeça.
 - **Pesquisa sozinho quando precisa**: mesmo com a Pesquisa desligada, ele busca na internet quando a pergunta pede algo atual (cotação, notícia, resultado) em vez de inventar. Dá pra desligar em Configurações → Pesquisa automática.
 - **Rápido pra responder**: o modelo começa a carregar enquanto você digita e fica pronto enquanto o NTChat está na tela. Uns 10 minutos depois que você sai, ele libera a placa de vídeo sozinho (ou na hora, no botão **Liberar** da barra lateral, pra jogar por exemplo).

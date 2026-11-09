@@ -24,12 +24,13 @@ The installer downloads and sets up everything by itself, no administrator neede
 |---|---|---|
 | Its own Python (lives inside the app folder) | chat server | ~0.1 GB |
 | [Ollama](https://ollama.com) | runs the AI model | ~3 GB |
-| **NTChat** model (uncensored, understands images) | the brain of the chat | ~6 GB |
+| **NTChat** model (uncensored, understands images) | the brain of the chat; on cards under 8 GB the installer recommends the lighter **NTChat Lite** | ~6 GB (Lite: ~3 GB) |
 | NTChat voice ✓ (optional) | reads answers aloud and talks with you | 0.2 GB |
 | Microphone ✓ (optional) | talk instead of typing | 0.6 GB |
 | Stickers (optional) | cuts out image backgrounds | 0.4 GB |
 | [ComfyUI](https://github.com/Comfy-Org/ComfyUI) (if you pick any image model) | runs the image models | ~6 GB |
-| Chroma1-HD (optional) | uncensored, the most detailed images | 15 to 23 GB |
+| Chroma Flash ✓ (optional) | uncensored, detailed and fast images (~30 s) | 15 to 24 GB |
+| Chroma1-HD (optional) | uncensored, the most detailed images, slower | 15 to 23 GB |
 | Z-Image Turbo ✓ (optional) | fast images, great at photos | 10 to 20 GB |
 | Stable Diffusion 1.5 (optional) | instant images, with a wonky old-AI look | 2.3 GB |
 | FLUX.2 klein ✓ (optional) | edits the photos you send | 4.4 to 12 GB |
@@ -84,7 +85,8 @@ Ask for a website and it shows up ready next to the chat. You can see how it loo
 
 Turn on **Image** and ask for anything: a photo, a meme, a drawing. Pick the model next to the style:
 
-- **Chroma**: uncensored and the most detailed; takes about 2 minutes per image.
+- **Chroma Flash**: uncensored, detailed and about 3x faster than normal Chroma (around 30 seconds per image).
+- **Chroma**: uncensored and the most detailed; takes 1 to 2 minutes per image.
 - **Z-Image Turbo**: fast (about 10 seconds) and great at realistic photos.
 - **Stable Diffusion 1.5**: the 2022 model. Comes out in seconds, with that wonky, funny look of the old AIs.
 
@@ -145,6 +147,7 @@ It saves what you tell it about yourself on its own (you can see and delete each
 - **Attach images, PDFs and code files**: it reads them and answers about them.
 - **Voice typing**: talk and it types (runs on the PC, nothing goes to the internet).
 - **Long chats** don't "forget" the start: when memory fills up, it summarizes the old messages by itself.
+- **Reminders**: say "remind me tomorrow at 9 to call the dentist" and at that time a Windows notification with sound shows up, even with NTChat closed.
 - **Math done right**: for any calculation it uses a real calculator instead of doing it in its head.
 - **Searches by itself when needed**: even with Web search off, it looks things up when the question needs something current (exchange rates, news, results) instead of making it up. You can turn this off in Settings → Automatic search.
 - **Quick to answer**: the model starts loading while you type and stays ready while NTChat is on screen. About 10 minutes after you leave, it frees the graphics card by itself (or right away with the **Free up** button in the sidebar, before playing a game for example).

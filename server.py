@@ -81,7 +81,8 @@ T5_FILES = ["t5xxl_fp8_e4m3fn_scaled.safetensors", "t5xxl_fp16.safetensors"]
 SD15_FILES = ["v1-5-pruned-emaonly-fp16.safetensors", "v1-5-pruned-emaonly.safetensors"]
 LCM_FILES = ["lcm-lora-sdv1-5.safetensors"]
 KLEIN_FILES = ["flux-2-klein-4b-fp8.safetensors"]
-GENERATORS = ("chroma", "zimage", "sd15")  # models that create images from a description; klein edits photos
+FLASH_LORA = "Chroma1-Flash_LoRA_rank64.safetensors"
+GENERATORS = ("chroma", "chromaflash", "zimage", "sd15")  # models that create images from a description; klein edits photos
 SD15_SIZES = {"quadrado": (512, 512), "retrato": (512, 768), "paisagem": (768, 512)}
 HF_ZIMAGE = "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files"
 HF_CHROMA = "https://huggingface.co/Comfy-Org/Chroma1-HD/resolve/main/split_files/diffusion_models"
@@ -98,12 +99,19 @@ MODEL_FILES = {
     "v1-5-pruned-emaonly-fp16.safetensors": ("https://huggingface.co/Comfy-Org/stable-diffusion-v1-5-archive/resolve/main/v1-5-pruned-emaonly-fp16.safetensors", 2.13),
     "flux-2-klein-4b-fp8.safetensors": ("https://huggingface.co/black-forest-labs/FLUX.2-klein-4b-fp8/resolve/main/flux-2-klein-4b-fp8.safetensors", 3.8),
     "flux2-vae.safetensors": ("https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/vae/flux2-vae.safetensors", 0.32),
+    FLASH_LORA: ("https://huggingface.co/darian23/Chroma1-Flash-LoRA/resolve/main/Chroma1-Flash_LoRA_rank64.safetensors", 0.47),
     "lcm-lora-sdv1-5.safetensors": ("https://huggingface.co/latent-consistency/lcm-lora-sdv1-5/resolve/main/pytorch_lora_weights.safetensors", 0.13),
 }
 # The image models the app knows, best first (the first one installed is the default).
 # Each file: (folder, names that count as installed, which one to download: one name, or one per kind of card).
 # Kinds of card: nvidia50 (RTX 50), nvidia (other NVIDIA), amd, intel. The fp8/fp4 files are for NVIDIA; the others get the full ones.
 IMAGE_MODELS = {
+    # the same Chroma files plus a small LoRA that makes it work in 8 steps (about 3x faster)
+    "chromaflash": {"name": "Chroma Flash", "files": [
+        ("diffusion_models", CHROMA_FILES, {"nvidia50": "Chroma1-HD-fp8mixed.safetensors", "nvidia": "Chroma1-HD-fp8mixed.safetensors", "other": "Chroma1-HD.safetensors"}),
+        ("text_encoders", T5_FILES, "t5xxl_fp8_e4m3fn_scaled.safetensors"),
+        ("vae", ["ae.safetensors"], "ae.safetensors"),
+        ("loras", [FLASH_LORA], FLASH_LORA)]},
     "chroma": {"name": "Chroma1-HD", "files": [
         ("diffusion_models", CHROMA_FILES, {"nvidia50": "Chroma1-HD-fp8mixed.safetensors", "nvidia": "Chroma1-HD-fp8mixed.safetensors", "other": "Chroma1-HD.safetensors"}),
         ("text_encoders", T5_FILES, "t5xxl_fp8_e4m3fn_scaled.safetensors"),
@@ -696,6 +704,7 @@ def features():
             "voice": has_module("faster_whisper") and has_module("av"),
             "stickers": has_module("rembg") and has_module("PIL") and has_module("scipy"),
             "tts": voice_ready(),
+            "lembretes": os.name == "nt",
         }
     return FEATURES
 
@@ -862,6 +871,16 @@ def chroma_nodes(prompt, seed, denoise):
         "13": {"class_type": "VAELoader", "inputs": {"vae_name": "ae.safetensors"}},
         "14": {"class_type": "VAEDecode", "inputs": {"samples": ["12", 0], "vae": ["13", 0]}},
     }
+
+
+def chroma_flash_workflow(prompt, width, height, seed):
+    w = chroma_workflow(prompt, width, height, seed)
+    w["20"] = {"class_type": "LoraLoaderModelOnly", "inputs": {"model": ["1", 0], "lora_name": FLASH_LORA, "strength_model": 1.0}}
+    w["2"]["inputs"]["model"] = ["20", 0]
+    w["7"]["inputs"]["cfg"] = 1.0  # the Flash LoRA has the guidance built in (so the negative prompt does nothing)
+    w["8"]["inputs"]["sampler_name"] = "heun"
+    w["9"]["inputs"]["steps"] = 8
+    return w
 
 
 def chroma_workflow(prompt, width, height, seed):
@@ -1041,6 +1060,8 @@ def generate_image(prompt, fmt, count=1, model=None):
         seed = random.randint(1, 2**31 - 1)
         if model == "chroma":
             png, seconds = run_comfy(chroma_workflow(prompt, width, height, seed), "15", timeout=1200)
+        elif model == "chromaflash":
+            png, seconds = run_comfy(chroma_flash_workflow(prompt, width, height, seed), "15", timeout=600)
         elif model == "sd15":
             png, seconds = run_comfy(classic_workflow(prompt, fmt, seed), "9")
         else:
@@ -1090,6 +1111,8 @@ def edit_image(file, prompt, strength, model=None):
     denoise = EDIT_STRENGTH.get(strength, EDIT_STRENGTH["medio"])
     seed = random.randint(1, 2**31 - 1)
     model = pick_image_model(model)
+    if model == "chromaflash":
+        model = "chroma"  # the edit uses the normal Chroma (the Flash LoRA is only for creating)
     if model == "chroma":
         png, seconds = run_comfy(chroma_edit_workflow(input_name, prompt, denoise, seed), "15", timeout=1200)
     elif model == "sd15":
@@ -2034,6 +2057,8 @@ class ChatHandler(QuietHandler):
             self.run_api(image_models_status)
         elif path == "/api/gpu":
             self.send_json(gpu_state())
+        elif path == "/api/lembretes":
+            self.run_api(reminders_status)
         elif path == "/api/sync":
             since = int(arg("since")) if arg("since").isdigit() else 0
             self.run_api(lambda: {**sync(since), "version": APP_VERSION})
@@ -2109,6 +2134,8 @@ class ChatHandler(QuietHandler):
             self.run_api(lambda: edit_photo(data.get("imagem"), data.get("pedido"), data.get("fonte"), data.get("imagem2"), data.get("fonte2"), data.get("arquivo")))
         elif path == "/api/voice-ready":
             self.run_api(voice_ready_now)
+        elif path == "/api/lembretes":
+            self.run_api(lambda: {**reminder_action(data.get("acao"), data), **reminders_status()})
         elif path == "/api/tts":
             self.run_api(lambda: speak_text(data.get("texto"), data.get("voz"), self.lang(), data.get("velocidade")))
         elif path == "/api/upscale":
@@ -2159,6 +2186,122 @@ class ChatHandler(QuietHandler):
             self.run_api(open_folder)
         else:
             self.send_json({"error": "não encontrado"}, 404)
+
+
+# ---------- reminders: "me avisa amanhã às 9" -> a Windows notification at that time ----------
+REMINDER_APP_ID = "NTChat.Lembretes"
+reminders_lock = threading.Lock()
+toast_app_ready = False
+
+
+def reminders_file():
+    os.makedirs(DATA, exist_ok=True)
+    return os.path.join(DATA, "lembretes.json")
+
+
+def load_reminders():
+    data = read_json(reminders_file(), [])
+    if not isinstance(data, list):
+        return []
+    return [r for r in data if isinstance(r, dict) and r.get("id") and isinstance(r.get("quando"), (int, float)) and r.get("texto")]
+
+
+def reminders_status():
+    with reminders_lock:
+        pending = sorted((r for r in load_reminders() if not r.get("avisado")), key=lambda r: r["quando"])
+    return {"lembretes": pending}
+
+
+def reminder_action(action, data):
+    with reminders_lock:
+        items = load_reminders()
+        if action == "criar":
+            text = re.sub(r"\s+", " ", str(data.get("texto") or "")).strip()[:300]
+            try:
+                when = int(data.get("quando"))
+            except (TypeError, ValueError):
+                raise UserError("horário inválido")
+            now = time.time() * 1000
+            if not text:
+                raise UserError("diga do que é o lembrete")
+            if when < now - 60_000:
+                raise UserError("esse horário já passou")
+            if when > now + 2 * 365 * 86_400_000:
+                raise UserError("esse horário está longe demais")
+            item = {"id": secrets.token_hex(6), "texto": text, "quando": when, "criado": int(now)}
+            items.append(item)
+            write_json(reminders_file(), items)
+            return {"lembrete": item}
+        if action == "cancelar":
+            write_json(reminders_file(), [r for r in items if r["id"] != str(data.get("id") or "")])
+            return {"ok": True}
+    raise UserError("ação inválida")
+
+
+def fire_due_reminders(now=None):
+    """Shows the reminders whose time came (also the ones missed while the PC was off, saying the time they were for)."""
+    now = now or time.time() * 1000
+    with reminders_lock:
+        items = load_reminders()
+        due = [r for r in items if not r.get("avisado") and r["quando"] <= now]
+        if not due:
+            return []
+        for r in due:
+            r["avisado"] = int(now)
+        week = now - 7 * 86_400_000
+        write_json(reminders_file(), [r for r in items if not r.get("avisado") or r["avisado"] > week])
+    for r in due:
+        show_notification(r["texto"], r["quando"] if now - r["quando"] > 5 * 60_000 else None)
+    return due
+
+
+def reminders_watcher():
+    while True:
+        try:
+            fire_due_reminders()
+        except Exception:
+            pass
+        time.sleep(10)
+
+
+def register_toast_app():
+    """Windows shows notifications only for a known app: register "NTChat" (name and icon) for this user."""
+    global toast_app_ready
+    if toast_app_ready or os.name != "nt":
+        return
+    import winreg
+    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, rf"Software\Classes\AppUserModelId\{REMINDER_APP_ID}") as k:
+        winreg.SetValueEx(k, "DisplayName", 0, winreg.REG_SZ, "NTChat")
+        winreg.SetValueEx(k, "IconUri", 0, winreg.REG_SZ, os.path.join(ROOT, "icone-192.png"))
+    toast_app_ready = True
+
+
+def show_notification(text, late_since=None):
+    """A Windows notification that stays until closed, with the reminder sound and the Snooze / Dismiss buttons."""
+    if os.name != "nt":
+        return False
+    register_toast_app()
+    en = CONFIG.get("lang") == "en"
+    title = "Reminder" if en else "Lembrete"
+    if late_since:
+        hour = time.strftime("%H:%M", time.localtime(late_since / 1000))
+        title += f" (for {hour})" if en else f" (era pra {hour})"
+    xml = ('<toast scenario="reminder"><visual><binding template="ToastGeneric">'
+           f'<text>{html.escape(title)}</text><text>{html.escape(text)}</text>'
+           '</binding></visual><actions>'
+           '<action activationType="system" arguments="snooze" content=""/>'
+           '<action activationType="system" arguments="dismiss" content=""/>'
+           '</actions><audio src="ms-winsoundevent:Notification.Reminder"/></toast>')
+    script = ("$ErrorActionPreference = 'Stop'\n"
+              "[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null\n"
+              "[Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] > $null\n"
+              "$x = New-Object Windows.Data.Xml.Dom.XmlDocument\n"
+              f"$x.LoadXml('{xml.replace(chr(39), chr(39) * 2)}')\n"
+              f"[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('{REMINDER_APP_ID}').Show([Windows.UI.Notifications.ToastNotification]::new($x))\n")
+    encoded = base64.b64encode(script.encode("utf-16-le")).decode()
+    r = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-EncodedCommand", encoded],
+                       capture_output=True, timeout=30, creationflags=0x08000000)  # CREATE_NO_WINDOW
+    return r.returncode == 0
 
 
 # ---------- a sharp taskbar icon for the NTChat window (Windows) ----------
@@ -2223,6 +2366,7 @@ def main():
     threading.Thread(target=gpu_idle_watcher, daemon=True).start()
     threading.Thread(target=update_watcher, daemon=True).start()
     threading.Thread(target=window_icon_keeper, daemon=True).start()
+    threading.Thread(target=reminders_watcher, daemon=True).start()
     ThreadingHTTPServer((CHAT_BIND, CHAT_PORT), ChatHandler).serve_forever()
 
 
