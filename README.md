@@ -147,7 +147,7 @@ It saves what you tell it about yourself on its own (you can see and delete each
 - **Attach images, PDFs and code files**: it reads them and answers about them.
 - **Voice typing**: talk and it types (runs on the PC, nothing goes to the internet).
 - **Long chats** don't "forget" the start: when memory fills up, it summarizes the old messages by itself.
-- **Reminders**: say "remind me tomorrow at 9 to call the dentist" and at that time a Windows notification with sound shows up, even with NTChat closed.
+- **Reminders**: type `/remind tomorrow 4pm call the dentist` (or `/remind in 20 min take the cake out`) and at that time a Windows notification with sound shows up, even with NTChat closed.
 - **Math done right**: for any calculation it uses a real calculator instead of doing it in its head.
 - **Searches by itself when needed**: even with Web search off, it looks things up when the question needs something current (exchange rates, news, results) instead of making it up. You can turn this off in Settings → Automatic search.
 - **Quick to answer**: the model starts loading while you type and stays ready while NTChat is on screen. About 10 minutes after you leave, it frees the graphics card by itself (or right away with the **Free up** button in the sidebar, before playing a game for example).

@@ -210,6 +210,8 @@ window.I18N_EN = {
     'Editando a foto': 'Editing the photo',
     'Marcando o lembrete': 'Setting the reminder',
     'Lembretes': 'Reminders',
+    'Mais': 'More',
+    'Nenhum lembrete marcado.': 'No reminders set.',
     'Pular': 'Skip',
     'Próximo': 'Next',
     'Começar': 'Start',

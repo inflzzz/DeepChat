@@ -147,7 +147,7 @@ Ele guarda sozinho o que você conta sobre você (dá pra ver e apagar cada item
 - **Anexa imagens, PDFs e arquivos de código**: ele lê e responde sobre eles.
 - **Ditado por voz**: fala que ele escreve (roda no PC, nada vai pra internet).
 - **Conversas longas** não "esquecem" o começo: quando a memória enche, ele resume as mensagens antigas sozinho.
-- **Lembretes**: diga "me avisa amanhã às 9 pra ligar pro dentista" e, na hora, aparece uma notificação do Windows com som, mesmo com o NTChat fechado.
+- **Lembretes**: digite `/lembrar amanhã 16h ligar pro dentista` (ou `/lembrar daqui 20 min tirar o bolo`) e, na hora, aparece uma notificação do Windows com som, mesmo com o NTChat fechado.
 - **Contas sempre certas**: pra qualquer conta ele usa uma calculadora de verdade, em vez de fazer de cabeça.
 - **Pesquisa sozinho quando precisa**: mesmo com a Pesquisa desligada, ele busca na internet quando a pergunta pede algo atual (cotação, notícia, resultado) em vez de inventar. Dá pra desligar em Configurações → Pesquisa automática.
 - **Rápido pra responder**: o modelo começa a carregar enquanto você digita e fica pronto enquanto o NTChat está na tela. Uns 10 minutos depois que você sai, ele libera a placa de vídeo sozinho (ou na hora, no botão **Liberar** da barra lateral, pra jogar por exemplo).

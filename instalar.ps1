@@ -459,7 +459,8 @@ $todosExtras = @($LISTA_EXTRAS | ForEach-Object { $_.Chave })
 $escolhidos = @()       # image models
 $extrasEscolhidos = @()
 if ($Atualizando) {
-    $extrasEscolhidos = @($LISTA_EXTRAS | Where-Object { Modulos-Ok (Join-Path $Venv 'Scripts\python.exe') $_.Modulos } | ForEach-Object { $_.Chave })
+    # An update keeps the extras the PC has and adds the voice (small, runs on the processor), so updated PCs get it too
+    $extrasEscolhidos = @($LISTA_EXTRAS | Where-Object { $_.Chave -eq 'voz' -or (Modulos-Ok (Join-Path $Venv 'Scripts\python.exe') $_.Modulos) } | ForEach-Object { $_.Chave })
 } else {
     $perguntar = -not ($Extras -or $Modelos -or $ComImagens -or $SemImagens -or $ModeloChat)
     # The chat model is picked on the first install; after that, config.json keeps it
@@ -540,7 +541,7 @@ $precisa = 0
 if (-not $ollama) { $precisa += 3 }
 if (-not $chatEscolhido) { $chatEscolhido = $MODELOS_CHAT[0] }  # a model of their own in config.json: it is not downloaded here
 if (-not ($ollama -and (Ollama-Ligado) -and (Tem-Modelo $Modelo))) { $precisa += [math]::Ceiling($chatEscolhido.GB) + 1 }
-if ($precisa) {
+if ($precisa -and -not $Atualizando) {  # an update never downloads Ollama or the chat model
     $disco = $env:SystemDrive.TrimEnd(':')
     $livreSistema = [math]::Floor((Get-PSDrive -Name $disco).Free / 1GB)
     if ($livreSistema -lt $precisa) {
